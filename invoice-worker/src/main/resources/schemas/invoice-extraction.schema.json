@@ -1,0 +1,63 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "InvoiceExtractionResult",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "supplierName",
+    "invoiceNumber",
+    "invoiceDate",
+    "dueDate",
+    "netAmount",
+    "vatAmount",
+    "grossAmount",
+    "currency",
+    "customerNumber",
+    "orderNumber",
+    "paymentReference",
+    "warnings"
+  ],
+  "properties": {
+    "supplierName": {
+      "type": ["string", "null"]
+    },
+    "invoiceNumber": {
+      "type": ["string", "null"]
+    },
+    "invoiceDate": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "dueDate": {
+      "type": ["string", "null"],
+      "format": "date"
+    },
+    "netAmount": {
+      "type": ["number", "null"]
+    },
+    "vatAmount": {
+      "type": ["number", "null"]
+    },
+    "grossAmount": {
+      "type": ["number", "null"]
+    },
+    "currency": {
+      "type": ["string", "null"]
+    },
+    "customerNumber": {
+      "type": ["string", "null"]
+    },
+    "orderNumber": {
+      "type": ["string", "null"]
+    },
+    "paymentReference": {
+      "type": ["string", "null"]
+    },
+    "warnings": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}
