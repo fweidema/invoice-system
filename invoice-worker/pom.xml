@@ -11,6 +11,7 @@
     </parent>
 
     <artifactId>invoice-worker</artifactId>
+
     <build>
         <plugins>
             <plugin>
@@ -27,7 +28,14 @@
             <artifactId>pdfbox</artifactId>
             <version>3.0.5</version>
         </dependency>
-<dependency>
+
+        <dependency>
+            <groupId>com.fasterxml.jackson.core</groupId>
+            <artifactId>jackson-databind</artifactId>
+            <version>2.17.2</version>
+        </dependency>
+
+        <dependency>
             <groupId>org.junit.jupiter</groupId>
             <artifactId>junit-jupiter</artifactId>
             <version>5.13.1</version>
@@ -41,6 +49,5 @@
             <scope>test</scope>
         </dependency>
     </dependencies>
-
 
 </project>
