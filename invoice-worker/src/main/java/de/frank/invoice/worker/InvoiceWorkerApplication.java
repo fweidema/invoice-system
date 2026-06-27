@@ -1,8 +1,8 @@
 package de.frank.invoice.worker;
 
-import de.frank.invoice.worker.document.Document;
-import de.frank.invoice.worker.importer.DocumentImporter;
-import de.frank.invoice.worker.pipeline.DocumentProcessingPipeline;
+import de.frank.invoice.worker.domain.document.Document;
+import de.frank.invoice.worker.application.importer.DocumentImporter;
+import de.frank.invoice.worker.application.pipeline.DocumentProcessingPipeline;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -54,3 +54,4 @@ public class InvoiceWorkerApplication {
         return value != null && !value.isBlank();
     }
 }
+
