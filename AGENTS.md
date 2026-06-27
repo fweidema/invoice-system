@@ -1,5 +1,9 @@
 # Projektregeln
+Arbeite ausschließlich im aktuellen lokalen Git-Repository.
+Erstelle, ändere und verschiebe Dateien direkt im Projekt.
+Verwende keine Windows-Sandbox.
 
+Wenn Dateien geändert werden sollen, führe die Änderungen direkt im Repository durch.
 - Dieses Repository ist eine wiederverwendbare Bootstrap-Vorlage für kleine Java-Projekte.
 - Java 21 verwenden.
 - Maven als Build-System verwenden.

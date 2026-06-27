@@ -1,215 +1,119 @@
 # Development Process
 
-## Ziel
+Dieses Dokument beschreibt den Entwicklungsprozess des Projekts
+**invoice-system**. Ziel ist eine nachvollziehbare, wartbare und qualitativ
+hochwertige Softwareentwicklung.
 
-Dieses Dokument beschreibt den Entwicklungsprozess des Projekts **invoice-system**.
+## Entwicklungsprinzipien
 
-Das Ziel ist eine nachvollziehbare, wartbare und qualitativ hochwertige Softwareentwicklung. Architektur, Implementierung und Dokumentation werden getrennt betrachtet und schrittweise weiterentwickelt.
+- Architektur vor Implementierung.
+- Kleine, nachvollziehbare Aenderungen.
+- Fachlich orientierte Modellierung.
+- Testbare Komponenten.
+- Automatisierte Builds.
+- Dokumentierte Architekturentscheidungen.
+- Dokumentation als Teil des Produkts.
 
----
+## Rollen
 
-# Entwicklungsprinzipien
+### Entwickler
 
-Das Projekt verfolgt folgende Grundsätze:
+Der Entwickler definiert fachliche Anforderungen, prueft Ergebnisse und trifft
+Architekturentscheidungen.
 
-* Architektur vor Implementierung
-* Kleine, nachvollziehbare Änderungen
-* Fachlich orientierte Modellierung
-* Testbare Komponenten
-* Automatisierte Builds
-* Vollständige Versionshistorie
-* Dokumentierte Architekturentscheidungen
+### Codex
 
----
+Codex setzt klar beschriebene Aufgaben um. Die Aufgaben liegen als
+Markdown-Dateien unter `docs/codex-tasks`.
 
-# Rollen
+### ChatGPT
 
-## Entwickler
+ChatGPT unterstuetzt Architektur, Aufgabenformulierung, Review und
+Dokumentation.
 
-Der Entwickler definiert die fachlichen Anforderungen und trifft Architekturentscheidungen.
+## Entwicklungsablauf
 
-Aufgaben:
+### 1. Architektur klaeren
 
-* Anforderungen formulieren
-* Ergebnisse prüfen
-* Code reviewen
-* Releases freigeben
+Vor groesseren Implementierungen wird der fachliche und technische Ansatz
+beschrieben. Relevante Entscheidungen werden als ADR unter `docs/decisions`
+dokumentiert.
 
----
+### 2. Codex-Aufgabe erstellen
 
-## Codex
+Jede groessere Umsetzung erhaelt eine eigene Datei unter `docs/codex-tasks`.
+Eine Aufgabe beschreibt Ziel, Anforderungen, Qualitaetskriterien, technische
+Randbedingungen und das erwartete Ergebnis.
 
-Codex übernimmt die Implementierung einzelner Aufgaben.
+### 3. Implementieren
 
-Codex soll ausschließlich Aufgaben umsetzen, die zuvor als Markdown-Dokument beschrieben wurden.
+Die Implementierung beschraenkt sich auf die beschriebene Aufgabe. Zusaetzliche
+Funktionen, Frameworks oder Architekturveraenderungen werden nicht nebenbei
+eingefuehrt.
 
----
+### 4. Reviewen
 
-## ChatGPT
+Nach der Umsetzung werden insbesondere folgende Punkte geprueft:
 
-ChatGPT unterstützt als Architekt und Reviewer.
+- Lesbarkeit.
+- Wartbarkeit.
+- Testbarkeit.
+- Fehlerbehandlung.
+- Paketstruktur.
+- Dokumentation.
+- Einhaltung der Architekturentscheidungen.
 
-Aufgaben:
+### 5. Bauen und testen
 
-* Architektur entwerfen
-* Domänenmodell entwickeln
-* Codex-Aufgaben formulieren
-* Code Reviews unterstützen
-* Architekturentscheidungen dokumentieren
-
----
-
-# Entwicklungsablauf
-
-Jede neue Funktion wird nach dem gleichen Ablauf entwickelt.
-
-## 1. Architektur
-
-Vor jeder Implementierung wird die gewünschte Lösung fachlich entworfen.
-
-Falls notwendig werden neue Architekturentscheidungen als ADR dokumentiert.
-
----
-
-## 2. Codex-Aufgabe erstellen
-
-Für jede größere Aufgabe wird eine neue Datei unter
-
-```text
-docs/codex-tasks
-```
-
-angelegt.
-
-Die Aufgabe beschreibt:
-
-* Ziel
-* Anforderungen
-* Qualitätskriterien
-* technische Randbedingungen
-* gewünschtes Ergebnis
-
----
-
-## 3. Implementierung
-
-Codex implementiert ausschließlich die beschriebene Aufgabe.
-
-Es sollen keine zusätzlichen Funktionen ergänzt werden.
-
----
-
-## 4. Review
-
-Nach jeder Implementierung erfolgt ein Review.
-
-Dabei wird geprüft:
-
-* Architektur
-* Lesbarkeit
-* Java-Konventionen
-* Paketstruktur
-* Dokumentation
-* Testbarkeit
-
----
-
-## 5. Build
-
-Vor jedem Commit wird das Projekt vollständig gebaut.
+Vor einem Commit wird der Maven-Build ausgefuehrt.
 
 ```bash
 ./mvnw clean verify
 ```
 
-Der Build muss ohne Fehler erfolgreich sein.
+Mindestens muessen alle Tests ueber den Maven-Lifecycle `test` ausfuehrbar sein.
 
----
+```bash
+./mvnw test
+```
 
-## 6. Tests
+### 6. Committen
 
-Alle vorhandenen Tests müssen erfolgreich laufen.
-
-Neue fachliche Komponenten sollen möglichst früh durch Unit-Tests abgesichert werden.
-
----
-
-## 7. Commit
-
-Nach erfolgreichem Review erfolgt ein Git-Commit.
-
-Commits sollen klein und nachvollziehbar sein.
-
-Beispiele:
+Commits bleiben klein und nachvollziehbar. Geeignete Beispiele:
 
 ```text
 feat: add invoice domain model
-
-feat: implement OCR service
-
-refactor: extract document workflow
-
 docs: add architecture documentation
-
+refactor: extract document workflow
 test: add money value object tests
 ```
 
----
+## Architekturentscheidungen
 
-# Architekturentscheidungen
+Architekturentscheidungen werden als Architecture Decision Records dokumentiert.
+Jede ADR beschreibt Kontext, Entscheidung, Begruendung und Auswirkungen.
 
-Größere technische Entscheidungen werden als ADR dokumentiert.
+## Dokumentationspflege
 
-Verzeichnis:
+Mindestens folgende Dokumente werden aktuell gehalten:
 
-```text
-docs/decisions
-```
+- `docs/architecture.md`
+- `docs/roadmap.md`
+- `docs/changelog.md`
+- `docs/development-process.md`
+- `docs/decisions/*.md`
+- `docs/codex-tasks/*.md`
 
-Jede Entscheidung beschreibt:
+## Qualitaetsanforderungen
 
-* Problem
-* Entscheidung
-* Begründung
-* Auswirkungen
-
----
-
-# Dokumentation
-
-Die Dokumentation ist Bestandteil der Software.
-
-Sie wird gemeinsam mit dem Code gepflegt.
-
-Mindestens folgende Dokumente sollen aktuell gehalten werden:
-
-* architecture.md
-* roadmap.md
-* changelog.md
-* development-process.md
-
----
-
-# Qualitätsanforderungen
-
-Der Code soll folgende Eigenschaften erfüllen:
-
-* Java 21
-* Maven
-* Klare Paketstruktur
-* Fachlich orientierte Klassen
-* Immutable Value Objects bevorzugen
-* Java Records verwenden, wenn sinnvoll
-* JavaDoc für öffentliche APIs
-* Keine Wildcard-Imports
-* Keine unnötigen Frameworks
-* Verständliche Methodennamen
-* Kleine Klassen mit klarer Verantwortung
-
----
-
-# Grundsatz
-
-Die Architektur bestimmt den Code.
-
-Nicht der Code bestimmt die Architektur.
+- Java 21.
+- Maven.
+- Klare Paketstruktur.
+- Fachlich orientierte Klassen.
+- Immutable Value Objects bevorzugen.
+- Java Records verwenden, wenn sinnvoll.
+- JavaDoc fuer oeffentliche APIs.
+- Keine Wildcard-Imports.
+- Keine unnoetigen Frameworks.
+- Verstaendliche Methodennamen.
+- Kleine Klassen mit klarer Verantwortung.
