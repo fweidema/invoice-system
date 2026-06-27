@@ -1,7 +1,5 @@
 package de.frank.invoice.worker.domain.invoice;
 
-import java.util.Objects;
-
 /**
  * Represents the supplier data extracted from or assigned to an invoice.
  *
@@ -24,15 +22,6 @@ public record Supplier(
         String vatId,
         String iban) {
 
-    /**
-     * Creates a supplier and validates core identity and address values.
-     */
-    public Supplier {
-        Objects.requireNonNull(name, "name must not be null");
-        Objects.requireNonNull(street, "street must not be null");
-        Objects.requireNonNull(postalCode, "postalCode must not be null");
-        Objects.requireNonNull(city, "city must not be null");
-        Objects.requireNonNull(country, "country must not be null");
-    }
 }
+
 

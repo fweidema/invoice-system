@@ -44,14 +44,9 @@ public record Invoice(
      */
     public Invoice {
         Objects.requireNonNull(document, "document must not be null");
-        Objects.requireNonNull(supplier, "supplier must not be null");
-        Objects.requireNonNull(invoiceNumber, "invoiceNumber must not be null");
-        Objects.requireNonNull(invoiceDate, "invoiceDate must not be null");
-        Objects.requireNonNull(netAmount, "netAmount must not be null");
-        Objects.requireNonNull(vatAmount, "vatAmount must not be null");
-        Objects.requireNonNull(grossAmount, "grossAmount must not be null");
         vatSummaries = List.copyOf(Objects.requireNonNull(vatSummaries, "vatSummaries must not be null"));
         positions = List.copyOf(Objects.requireNonNull(positions, "positions must not be null"));
     }
 }
+
 
