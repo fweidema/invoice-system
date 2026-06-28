@@ -1,0 +1,12 @@
+{
+  "id": "scenario-001",
+  "description": "Fake Rechnung 01",
+  "document": "fake_scan_rechnung_01.pdf",
+  "expectedInvoice": {
+    "supplierName": "Mock Supplier GmbH",
+    "invoiceNumber": "MOCK-2026-001",
+    "grossAmount": 119.00,
+    "invoiceDate": "2026-06-27",
+    "currency": "EUR"
+  }
+}
