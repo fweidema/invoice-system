@@ -1,5 +1,6 @@
 package de.frank.invoice.worker.application.workflow;
 
+import de.frank.invoice.worker.application.archive.ArchiveResult;
 import de.frank.invoice.worker.application.duplicate.DuplicateCheckResult;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 
@@ -13,6 +14,7 @@ import java.util.Objects;
  * @param persisted whether the invoice was persisted successfully
  * @param persistenceMessage persistence outcome message
  * @param duplicateCheckResult duplicate check result, if duplicate detection was reached
+ * @param archiveResult archive result, if archiving was reached
  * @param messages workflow messages
  * @param invoice mapped invoice, if available
  */
@@ -21,6 +23,7 @@ public record DocumentProcessingResult(
         boolean persisted,
         String persistenceMessage,
         DuplicateCheckResult duplicateCheckResult,
+        ArchiveResult archiveResult,
         List<String> messages,
         Invoice invoice) {
 

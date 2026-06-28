@@ -4,6 +4,8 @@ import de.frank.invoice.worker.application.ai.AiClient;
 import de.frank.invoice.worker.application.ai.AiClientResponse;
 import de.frank.invoice.worker.application.ai.request.InvoiceExtractionRequestFactory;
 import de.frank.invoice.worker.application.ai.response.InvoiceExtractionResponseMapper;
+import de.frank.invoice.worker.application.archive.ArchiveResult;
+import de.frank.invoice.worker.application.archive.ArchiveService;
 import de.frank.invoice.worker.application.duplicate.DuplicateCheckResult;
 import de.frank.invoice.worker.application.duplicate.DuplicateDetector;
 import de.frank.invoice.worker.application.mapping.InvoiceMapper;
@@ -11,6 +13,9 @@ import de.frank.invoice.worker.application.persistence.InvoiceRepository;
 import de.frank.invoice.worker.application.pipeline.OcrStep;
 import de.frank.invoice.worker.application.pipeline.TextExtractionStep;
 import de.frank.invoice.worker.application.validation.InvoiceValidator;
+import de.frank.invoice.worker.application.validation.ValidationMessage;
+import de.frank.invoice.worker.application.validation.ValidationResult;
+import de.frank.invoice.worker.application.validation.ValidationSeverity;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
@@ -31,66 +36,144 @@ import static org.assertj.core.api.Assertions.assertThat;
 class DocumentProcessingWorkflowTest {
 
     @Test
-    void processPersistsInvoiceWhenNoDuplicateIsDetected() {
+    void processPersistsAndArchivesInvoiceWhenNoDuplicateIsDetected() {
         // Arrange
         final CountingInvoiceRepository repository = new CountingInvoiceRepository();
-        final DocumentProcessingWorkflow workflow = workflow(repository, new DuplicateDetector(repository));
+        final CountingArchiveService archiveService = new CountingArchiveService();
+        final DocumentProcessingWorkflow workflow = workflow(
+                repository,
+                new DuplicateDetector(repository),
+                archiveService);
 
         // Act
         final DocumentProcessingResult result = workflow.process(document());
 
         // Assert
         assertThat(repository.saveCount()).isEqualTo(1);
+        assertThat(archiveService.archiveCount()).isEqualTo(1);
         assertThat(result.persisted()).isTrue();
         assertThat(result.successful()).isTrue();
         assertThat(result.duplicateCheckResult()).isNotNull();
         assertThat(result.duplicateCheckResult().duplicate()).isFalse();
+        assertThat(result.archiveResult()).isNotNull();
+        assertThat(result.archiveResult().archived()).isTrue();
     }
 
     @Test
-    void processDoesNotPersistInvoiceWhenDuplicateIsDetected() {
+    void processDoesNotPersistOrArchiveInvoiceWhenDuplicateIsDetected() {
         // Arrange
         final CountingInvoiceRepository repository = new CountingInvoiceRepository();
         repository.fileHashExists = true;
-        final DocumentProcessingWorkflow workflow = workflow(repository, new DuplicateDetector(repository));
+        final CountingArchiveService archiveService = new CountingArchiveService();
+        final DocumentProcessingWorkflow workflow = workflow(
+                repository,
+                new DuplicateDetector(repository),
+                archiveService);
 
         // Act
         final DocumentProcessingResult result = workflow.process(document());
 
         // Assert
         assertThat(repository.saveCount()).isZero();
+        assertThat(archiveService.archiveCount()).isZero();
         assertThat(result.persisted()).isFalse();
         assertThat(result.successful()).isFalse();
         assertThat(result.duplicateCheckResult()).isNotNull();
         assertThat(result.duplicateCheckResult().duplicate()).isTrue();
+        assertThat(result.archiveResult()).isNull();
+    }
+
+    @Test
+    void processDoesNotArchiveInvoiceWhenValidationFails() {
+        // Arrange
+        final CountingInvoiceRepository repository = new CountingInvoiceRepository();
+        final CountingArchiveService archiveService = new CountingArchiveService();
+        final InvoiceValidator invoiceValidator = new InvoiceValidator() {
+            @Override
+            public ValidationResult validate(final Invoice invoice) {
+                return new ValidationResult(List.of(new ValidationMessage(
+                        ValidationSeverity.ERROR,
+                        "invoiceNumber",
+                        "Invoice number is required.")));
+            }
+        };
+        final DocumentProcessingWorkflow workflow = workflow(
+                repository,
+                new DuplicateDetector(repository),
+                archiveService,
+                invoiceValidator);
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(repository.saveCount()).isZero();
+        assertThat(archiveService.archiveCount()).isZero();
+        assertThat(result.successful()).isFalse();
+        assertThat(result.persisted()).isFalse();
+        assertThat(result.archiveResult()).isNull();
+    }
+
+    @Test
+    void processDoesNotArchiveInvoiceWhenPersistenceFails() {
+        // Arrange
+        final CountingInvoiceRepository repository = new CountingInvoiceRepository();
+        repository.failOnSave = true;
+        final CountingArchiveService archiveService = new CountingArchiveService();
+        final DocumentProcessingWorkflow workflow = workflow(
+                repository,
+                new DuplicateDetector(repository),
+                archiveService);
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(repository.saveCount()).isEqualTo(1);
+        assertThat(archiveService.archiveCount()).isZero();
+        assertThat(result.successful()).isFalse();
+        assertThat(result.persisted()).isFalse();
+        assertThat(result.archiveResult()).isNull();
     }
 
     @Test
     void processHandlesDuplicateDetectorException() {
         // Arrange
         final CountingInvoiceRepository repository = new CountingInvoiceRepository();
+        final CountingArchiveService archiveService = new CountingArchiveService();
         final DuplicateDetector duplicateDetector = new DuplicateDetector(repository) {
             @Override
             public DuplicateCheckResult check(final Document document, final Invoice invoice) {
                 throw new IllegalStateException("duplicate lookup unavailable");
             }
         };
-        final DocumentProcessingWorkflow workflow = workflow(repository, duplicateDetector);
+        final DocumentProcessingWorkflow workflow = workflow(repository, duplicateDetector, archiveService);
 
         // Act
         final DocumentProcessingResult result = workflow.process(document());
 
         // Assert
         assertThat(repository.saveCount()).isZero();
+        assertThat(archiveService.archiveCount()).isZero();
         assertThat(result.successful()).isFalse();
         assertThat(result.persisted()).isFalse();
         assertThat(result.duplicateCheckResult()).isNull();
+        assertThat(result.archiveResult()).isNull();
         assertThat(result.messages()).anyMatch(message -> message.contains("duplicate lookup unavailable"));
     }
 
     private DocumentProcessingWorkflow workflow(
             final InvoiceRepository invoiceRepository,
-            final DuplicateDetector duplicateDetector) {
+            final DuplicateDetector duplicateDetector,
+            final ArchiveService archiveService) {
+        return workflow(invoiceRepository, duplicateDetector, archiveService, new InvoiceValidator());
+    }
+
+    private DocumentProcessingWorkflow workflow(
+            final InvoiceRepository invoiceRepository,
+            final DuplicateDetector duplicateDetector,
+            final ArchiveService archiveService,
+            final InvoiceValidator invoiceValidator) {
         return new DocumentProcessingWorkflow(
                 ocrStep(),
                 textExtractionStep(),
@@ -98,9 +181,10 @@ class DocumentProcessingWorkflowTest {
                 aiClient(),
                 new InvoiceExtractionResponseMapper(),
                 new InvoiceMapper(),
-                new InvoiceValidator(),
+                invoiceValidator,
                 duplicateDetector,
-                invoiceRepository);
+                invoiceRepository,
+                archiveService);
     }
 
     private OcrStep ocrStep() {
@@ -164,11 +248,15 @@ class DocumentProcessingWorkflowTest {
 
         private final List<Invoice> invoices = new ArrayList<>();
         private boolean fileHashExists;
+        private boolean failOnSave;
         private int saveCount;
 
         @Override
         public void save(final Invoice invoice) {
             saveCount++;
+            if (failOnSave) {
+                throw new IllegalStateException("repository unavailable");
+            }
             invoices.add(invoice);
         }
 
@@ -207,6 +295,21 @@ class DocumentProcessingWorkflowTest {
 
         int saveCount() {
             return saveCount;
+        }
+    }
+
+    private static final class CountingArchiveService implements ArchiveService {
+
+        private int archiveCount;
+
+        @Override
+        public ArchiveResult archive(final Document document, final Invoice invoice) {
+            archiveCount++;
+            return new ArchiveResult(true, Path.of("archive", "invoice.pdf"), "Document archived successfully.");
+        }
+
+        int archiveCount() {
+            return archiveCount;
         }
     }
 }

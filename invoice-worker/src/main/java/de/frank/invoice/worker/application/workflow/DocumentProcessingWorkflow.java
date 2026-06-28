@@ -6,6 +6,8 @@ import de.frank.invoice.worker.application.ai.AiClientResponse;
 import de.frank.invoice.worker.application.ai.request.InvoiceExtractionRequestFactory;
 import de.frank.invoice.worker.application.ai.response.InvoiceExtractionResponse;
 import de.frank.invoice.worker.application.ai.response.InvoiceExtractionResponseMapper;
+import de.frank.invoice.worker.application.archive.ArchiveResult;
+import de.frank.invoice.worker.application.archive.ArchiveService;
 import de.frank.invoice.worker.application.duplicate.DuplicateCheckResult;
 import de.frank.invoice.worker.application.duplicate.DuplicateDetector;
 import de.frank.invoice.worker.application.mapping.InvoiceMapper;
@@ -24,7 +26,7 @@ import java.util.List;
 import java.util.Objects;
 
 /**
- * Orchestrates document processing from OCR through invoice validation, duplicate detection and persistence.
+ * Orchestrates document processing from OCR through validation, duplicate detection, persistence and archiving.
  */
 public class DocumentProcessingWorkflow {
 
@@ -40,6 +42,7 @@ public class DocumentProcessingWorkflow {
     private final InvoiceValidator invoiceValidator;
     private final DuplicateDetector duplicateDetector;
     private final InvoiceRepository invoiceRepository;
+    private final ArchiveService archiveService;
 
     /**
      * Creates a document processing workflow.
@@ -53,6 +56,7 @@ public class DocumentProcessingWorkflow {
      * @param invoiceValidator invoice validator
      * @param duplicateDetector duplicate detector
      * @param invoiceRepository invoice repository port
+     * @param archiveService archive service port
      */
     public DocumentProcessingWorkflow(
             final OcrStep ocrStep,
@@ -63,7 +67,8 @@ public class DocumentProcessingWorkflow {
             final InvoiceMapper invoiceMapper,
             final InvoiceValidator invoiceValidator,
             final DuplicateDetector duplicateDetector,
-            final InvoiceRepository invoiceRepository) {
+            final InvoiceRepository invoiceRepository,
+            final ArchiveService archiveService) {
         this.ocrStep = Objects.requireNonNull(ocrStep, "ocrStep must not be null");
         this.textExtractionStep = Objects.requireNonNull(textExtractionStep, "textExtractionStep must not be null");
         this.requestFactory = Objects.requireNonNull(requestFactory, "requestFactory must not be null");
@@ -73,10 +78,11 @@ public class DocumentProcessingWorkflow {
         this.invoiceValidator = Objects.requireNonNull(invoiceValidator, "invoiceValidator must not be null");
         this.duplicateDetector = Objects.requireNonNull(duplicateDetector, "duplicateDetector must not be null");
         this.invoiceRepository = Objects.requireNonNull(invoiceRepository, "invoiceRepository must not be null");
+        this.archiveService = Objects.requireNonNull(archiveService, "archiveService must not be null");
     }
 
     /**
-     * Processes a document and persists the invoice only after successful validation and duplicate detection.
+     * Processes a document and archives it only after successful validation, duplicate detection and persistence.
      *
      * @param document document to process
      * @return document processing result
@@ -97,38 +103,55 @@ public class DocumentProcessingWorkflow {
 
             if (!validationResult.valid()) {
                 messages.add("Invoice validation failed. Persistence skipped.");
-                return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, messages, invoice);
+                return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, null, messages, invoice);
             }
 
             final DuplicateCheckResult duplicateCheckResult = duplicateDetector.check(ocrDocument, invoice);
             messages.add(duplicateCheckResult.message());
             if (duplicateCheckResult.duplicate()) {
                 messages.add("Duplicate invoice detected. Persistence skipped.");
-                return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, duplicateCheckResult, messages, invoice);
+                return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, duplicateCheckResult, null, messages, invoice);
             }
 
-            return persist(invoice, duplicateCheckResult, messages);
+            return persistAndArchive(ocrDocument, invoice, duplicateCheckResult, messages);
         } catch (RuntimeException exception) {
             messages.add("Workflow failed: " + exception.getMessage());
-            return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, messages, null);
+            return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, null, messages, null);
         }
     }
 
-    private DocumentProcessingResult persist(
+    private DocumentProcessingResult persistAndArchive(
+            final Document document,
             final Invoice invoice,
             final DuplicateCheckResult duplicateCheckResult,
             final List<String> messages) {
         System.out.println("Persistenz gestartet");
         try {
             invoiceRepository.save(invoice);
-            System.out.println("Persistenz erfolgreich");
-            messages.add(PERSISTENCE_SUCCESS_MESSAGE);
-            return result(true, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, messages, invoice);
         } catch (RuntimeException exception) {
             System.out.println("Persistenz fehlgeschlagen");
             final String failureMessage = "Persistence failed: " + exception.getMessage();
             messages.add(failureMessage);
-            return result(false, false, failureMessage, duplicateCheckResult, messages, invoice);
+            return result(false, false, failureMessage, duplicateCheckResult, null, messages, invoice);
+        }
+
+        System.out.println("Persistenz erfolgreich");
+        messages.add(PERSISTENCE_SUCCESS_MESSAGE);
+        return archive(document, invoice, duplicateCheckResult, messages);
+    }
+
+    private DocumentProcessingResult archive(
+            final Document document,
+            final Invoice invoice,
+            final DuplicateCheckResult duplicateCheckResult,
+            final List<String> messages) {
+        try {
+            final ArchiveResult archiveResult = archiveService.archive(document, invoice);
+            messages.add(archiveResult.message());
+            return result(true, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, archiveResult, messages, invoice);
+        } catch (RuntimeException exception) {
+            messages.add("Archive failed: " + exception.getMessage());
+            return result(false, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, null, messages, invoice);
         }
     }
 
@@ -137,6 +160,7 @@ public class DocumentProcessingWorkflow {
             final boolean persisted,
             final String persistenceMessage,
             final DuplicateCheckResult duplicateCheckResult,
+            final ArchiveResult archiveResult,
             final List<String> messages,
             final Invoice invoice) {
         return new DocumentProcessingResult(
@@ -144,6 +168,7 @@ public class DocumentProcessingWorkflow {
                 persisted,
                 persistenceMessage,
                 duplicateCheckResult,
+                archiveResult,
                 messages,
                 invoice);
     }
