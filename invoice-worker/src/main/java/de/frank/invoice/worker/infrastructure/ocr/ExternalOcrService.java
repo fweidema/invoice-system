@@ -1,5 +1,7 @@
 package de.frank.invoice.worker.infrastructure.ocr;
 
+import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
+import de.frank.invoice.worker.application.configuration.OcrConfiguration;
 import de.frank.invoice.worker.domain.document.Document;
 
 import java.io.IOException;
@@ -14,30 +16,37 @@ import java.util.Objects;
  */
 public class ExternalOcrService implements OcrService {
 
-    private static final String DEFAULT_COMMAND = "ocrmypdf";
-    private static final String LANGUAGE = "deu";
     private static final String PDF_EXTENSION = ".pdf";
     private static final String OCR_SUFFIX = "-ocr.pdf";
 
     private final String ocrCommand;
+    private final String language;
 
     /**
-     * Creates a service using the default OCR command.
+     * Creates a service using central OCR configuration defaults.
      */
     public ExternalOcrService() {
-        this(DEFAULT_COMMAND);
+        this(new ConfigurationLoader().load().ocr());
     }
 
     /**
-     * Creates a service using the given OCR command.
+     * Creates a service using the given OCR command and central default OCR language.
      *
      * @param ocrCommand command used to start the OCR process
      */
     public ExternalOcrService(final String ocrCommand) {
-        if (ocrCommand == null || ocrCommand.isBlank()) {
-            throw new IllegalArgumentException("ocrCommand must not be blank");
-        }
-        this.ocrCommand = ocrCommand;
+        this(new OcrConfiguration(new ConfigurationLoader().load().ocr().language(), ocrCommand));
+    }
+
+    /**
+     * Creates a service using central OCR configuration.
+     *
+     * @param configuration OCR configuration
+     */
+    public ExternalOcrService(final OcrConfiguration configuration) {
+        Objects.requireNonNull(configuration, "configuration must not be null");
+        this.ocrCommand = configuration.command();
+        this.language = configuration.language();
     }
 
     /**
@@ -77,7 +86,7 @@ public class ExternalOcrService implements OcrService {
         command.add("--rotate-pages");
         command.add("--skip-text");
         command.add("-l");
-        command.add(LANGUAGE);
+        command.add(language);
         command.add(inputFile.toString());
         command.add(outputFile.toString());
 
@@ -96,5 +105,3 @@ public class ExternalOcrService implements OcrService {
         return filename + OCR_SUFFIX;
     }
 }
-
-

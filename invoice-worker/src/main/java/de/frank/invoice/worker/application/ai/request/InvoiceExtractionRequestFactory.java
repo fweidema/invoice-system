@@ -3,6 +3,7 @@ package de.frank.invoice.worker.application.ai.request;
 import de.frank.invoice.worker.application.ai.AiClientRequest;
 import de.frank.invoice.worker.application.ai.PromptRepository;
 import de.frank.invoice.worker.application.ai.SchemaRepository;
+import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
 
 import java.util.Objects;
@@ -14,7 +15,6 @@ public class InvoiceExtractionRequestFactory {
 
     private static final String DEFAULT_PROMPT_NAME = "invoice-extraction.md";
     private static final String DEFAULT_SCHEMA_NAME = "invoice-extraction.schema.json";
-    private static final String DEFAULT_MODEL = "mock-invoice-extraction";
 
     private final PromptRepository promptRepository;
     private final SchemaRepository schemaRepository;
@@ -31,7 +31,12 @@ public class InvoiceExtractionRequestFactory {
     public InvoiceExtractionRequestFactory(
             final PromptRepository promptRepository,
             final SchemaRepository schemaRepository) {
-        this(promptRepository, schemaRepository, DEFAULT_PROMPT_NAME, DEFAULT_SCHEMA_NAME, DEFAULT_MODEL);
+        this(
+                promptRepository,
+                schemaRepository,
+                DEFAULT_PROMPT_NAME,
+                DEFAULT_SCHEMA_NAME,
+                new ConfigurationLoader().load().ai().model());
     }
 
     /**
