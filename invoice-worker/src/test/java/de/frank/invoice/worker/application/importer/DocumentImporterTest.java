@@ -59,6 +59,23 @@ class DocumentImporterTest {
                 .containsExactly("invoice.pdf");
     }
 
+
+    @Test
+    void importDocumentsReturnsPdfFilesSortedByFilename() throws IOException {
+        // Arrange
+        Files.writeString(tempDirectory.resolve("b.pdf"), "b");
+        Files.writeString(tempDirectory.resolve("a.pdf"), "a");
+        Files.writeString(tempDirectory.resolve("c.pdf"), "c");
+
+        // Act
+        final List<Document> documents = documentImporter.importDocuments(tempDirectory);
+
+        // Assert
+        assertThat(documents)
+                .extracting(Document::originalFilename)
+                .containsExactly("a.pdf", "b.pdf", "c.pdf");
+    }
+
     @Test
     void importDocumentsSetsUnknownDocumentType() throws IOException {
         // Arrange
