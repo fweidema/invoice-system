@@ -66,6 +66,10 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             ON invoices(invoice_number)
             """;
 
+    private static final String ADD_FILE_HASH_COLUMN = """
+            ALTER TABLE invoices ADD COLUMN file_hash TEXT
+            """;
+
     private static final String INSERT_INVOICE = """
             INSERT INTO invoices (
                 document_id,
@@ -110,6 +114,20 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
     private static final String EXISTS_BY_INVOICE_NUMBER = """
             SELECT 1 FROM invoices
             WHERE invoice_number = ?
+            LIMIT 1
+            """;
+
+    private static final String EXISTS_BY_FILE_HASH = """
+            SELECT 1 FROM invoices
+            WHERE file_hash = ?
+            LIMIT 1
+            """;
+
+    private static final String EXISTS_BY_SUPPLIER_DATE_AND_GROSS_AMOUNT = """
+            SELECT 1 FROM invoices
+            WHERE supplier_name = ?
+              AND invoice_date = ?
+              AND gross_amount = ?
             LIMIT 1
             """;
 
@@ -205,15 +223,54 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
     @Override
     public boolean exists(final String invoiceNumber) {
         Objects.requireNonNull(invoiceNumber, "invoiceNumber must not be null");
+        return existsBySingleValue(
+                EXISTS_BY_INVOICE_NUMBER,
+                invoiceNumber,
+                "Could not check invoice existence for number: " + invoiceNumber);
+    }
+
+    /**
+     * Checks whether a file hash exists.
+     *
+     * @param fileHash source document file hash
+     * @return true if the file hash exists
+     */
+    @Override
+    public boolean existsByFileHash(final String fileHash) {
+        Objects.requireNonNull(fileHash, "fileHash must not be null");
+        return existsBySingleValue(
+                EXISTS_BY_FILE_HASH,
+                fileHash,
+                "Could not check invoice existence for file hash: " + fileHash);
+    }
+
+    /**
+     * Checks whether a supplier/date/gross amount combination exists.
+     *
+     * @param supplierName supplier name
+     * @param invoiceDate invoice issue date
+     * @param grossAmount gross amount value
+     * @return true if the combination exists
+     */
+    @Override
+    public boolean existsBySupplierDateAndGrossAmount(
+            final String supplierName,
+            final LocalDate invoiceDate,
+            final BigDecimal grossAmount) {
+        Objects.requireNonNull(supplierName, "supplierName must not be null");
+        Objects.requireNonNull(invoiceDate, "invoiceDate must not be null");
+        Objects.requireNonNull(grossAmount, "grossAmount must not be null");
 
         try (Connection connection = openConnection();
-             PreparedStatement statement = connection.prepareStatement(EXISTS_BY_INVOICE_NUMBER)) {
-            statement.setString(1, invoiceNumber);
+             PreparedStatement statement = connection.prepareStatement(EXISTS_BY_SUPPLIER_DATE_AND_GROSS_AMOUNT)) {
+            statement.setString(1, supplierName);
+            statement.setString(2, invoiceDate.toString());
+            statement.setString(3, grossAmount.toPlainString());
             try (ResultSet resultSet = statement.executeQuery()) {
                 return resultSet.next();
             }
         } catch (SQLException exception) {
-            throw new PersistenceException("Could not check invoice existence for number: " + invoiceNumber, exception);
+            throw new PersistenceException("Could not check invoice existence for supplier/date/amount", exception);
         }
     }
 
@@ -226,6 +283,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             try (Connection connection = openConnection();
                  Statement statement = connection.createStatement()) {
                 statement.execute(CREATE_INVOICES_TABLE);
+                ensureFileHashColumn(connection);
                 statement.execute(CREATE_INVOICE_NUMBER_INDEX);
             }
         } catch (Exception exception) {
@@ -235,6 +293,32 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
 
     private Connection openConnection() throws SQLException {
         return DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath().normalize());
+    }
+
+    private boolean existsBySingleValue(
+            final String sql,
+            final String value,
+            final String failureMessage) {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, value);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next();
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException(failureMessage, exception);
+        }
+    }
+
+    private void ensureFileHashColumn(final Connection connection) throws SQLException {
+        try (ResultSet resultSet = connection.getMetaData().getColumns(null, null, "invoices", "file_hash")) {
+            if (resultSet.next()) {
+                return;
+            }
+        }
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(ADD_FILE_HASH_COLUMN);
+        }
     }
 
     private void bindInvoice(final PreparedStatement statement, final Invoice invoice) throws SQLException {

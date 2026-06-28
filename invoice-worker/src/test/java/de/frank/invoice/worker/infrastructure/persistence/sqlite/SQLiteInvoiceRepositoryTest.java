@@ -66,6 +66,34 @@ class SQLiteInvoiceRepositoryTest {
     }
 
     @Test
+    void existsByFileHashReturnsFalseBeforeSaveAndTrueAfterSave() {
+        // Arrange
+        final SQLiteInvoiceRepository repository = repository();
+
+        // Act / Assert
+        assertThat(repository.existsByFileHash("hash-INV-001")).isFalse();
+        repository.save(invoice("INV-001"));
+        assertThat(repository.existsByFileHash("hash-INV-001")).isTrue();
+    }
+
+    @Test
+    void existsBySupplierDateAndGrossAmountReturnsFalseBeforeSaveAndTrueAfterSave() {
+        // Arrange
+        final SQLiteInvoiceRepository repository = repository();
+
+        // Act / Assert
+        assertThat(repository.existsBySupplierDateAndGrossAmount(
+                "Supplier GmbH",
+                LocalDate.of(2026, 6, 27),
+                new BigDecimal("119.00"))).isFalse();
+        repository.save(invoice("INV-001"));
+        assertThat(repository.existsBySupplierDateAndGrossAmount(
+                "Supplier GmbH",
+                LocalDate.of(2026, 6, 27),
+                new BigDecimal("119.00"))).isTrue();
+    }
+
+    @Test
     void findAllReturnsStoredInvoices() {
         // Arrange
         final SQLiteInvoiceRepository repository = repository();
