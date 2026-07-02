@@ -7,6 +7,11 @@ import de.frank.invoice.worker.application.configuration.BatchConfiguration;
 import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
 import de.frank.invoice.worker.application.configuration.OcrConfiguration;
 import de.frank.invoice.worker.application.configuration.PersistenceConfiguration;
+import de.frank.invoice.worker.infrastructure.ocr.ExternalOcrService;
+import de.frank.invoice.worker.infrastructure.ocr.NoOpOcrService;
+import de.frank.invoice.worker.infrastructure.ocr.OcrService;
+import de.frank.invoice.worker.infrastructure.pdf.MockPdfTextExtractor;
+import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -34,17 +39,70 @@ class InvoiceWorkerFactoryTest {
     @Test
     void createReturnsInvoiceWorkerWithoutNullDependencies() {
         // Arrange
-        final ApplicationConfiguration configuration = new ApplicationConfiguration(
-                new ArchiveConfiguration(tempDirectory.resolve("archive")),
-                new PersistenceConfiguration(tempDirectory.resolve("invoice-system.db")),
-                new OcrConfiguration("deu", "ocrmypdf"),
-                new AiConfiguration("gpt-5", 0.0),
-                new BatchConfiguration(tempDirectory.resolve("input"), false));
+        final ApplicationConfiguration configuration = configuration();
 
         // Act
         final InvoiceWorker invoiceWorker = new InvoiceWorkerFactory().create(configuration);
 
         // Assert
         assertThat(invoiceWorker).isNotNull();
+    }
+
+    @Test
+    void createOcrServiceReturnsNoOpOcrServiceWhenOcrIsSkipped() {
+        // Arrange
+        final InvoiceWorkerFactory factory = new InvoiceWorkerFactory();
+        final ApplicationConfiguration configuration = configuration();
+
+        // Act
+        final OcrService ocrService = factory.createOcrService(configuration, true);
+
+        // Assert
+        assertThat(ocrService).isInstanceOf(NoOpOcrService.class);
+    }
+
+    @Test
+    void createOcrServiceReturnsExternalOcrServiceByDefault() {
+        // Arrange
+        final InvoiceWorkerFactory factory = new InvoiceWorkerFactory();
+        final ApplicationConfiguration configuration = configuration();
+
+        // Act
+        final OcrService ocrService = factory.createOcrService(configuration, false);
+
+        // Assert
+        assertThat(ocrService).isInstanceOf(ExternalOcrService.class);
+    }
+
+    @Test
+    void createPdfTextExtractorReturnsMockPdfTextExtractorWhenMockTextIsEnabled() {
+        // Arrange
+        final InvoiceWorkerFactory factory = new InvoiceWorkerFactory();
+
+        // Act
+        final PdfTextExtractor pdfTextExtractor = factory.createPdfTextExtractor(true);
+
+        // Assert
+        assertThat(pdfTextExtractor).isInstanceOf(MockPdfTextExtractor.class);
+    }
+
+    @Test
+    void createPdfTextExtractorReturnsPdfTextExtractorByDefault() {
+        // Arrange
+        final InvoiceWorkerFactory factory = new InvoiceWorkerFactory();
+
+        // Act
+        final PdfTextExtractor pdfTextExtractor = factory.createPdfTextExtractor(false);
+
+        // Assert
+        assertThat(pdfTextExtractor).isExactlyInstanceOf(PdfTextExtractor.class);
+    }
+    private ApplicationConfiguration configuration() {
+        return new ApplicationConfiguration(
+                new ArchiveConfiguration(tempDirectory.resolve("archive")),
+                new PersistenceConfiguration(tempDirectory.resolve("invoice-system.db")),
+                new OcrConfiguration("deu", "ocrmypdf"),
+                new AiConfiguration("gpt-5", 0.0),
+                new BatchConfiguration(tempDirectory.resolve("input"), false));
     }
 }

@@ -18,6 +18,9 @@ import de.frank.invoice.worker.infrastructure.ai.resource.ResourcePromptReposito
 import de.frank.invoice.worker.infrastructure.ai.resource.ResourceSchemaRepository;
 import de.frank.invoice.worker.infrastructure.archive.FileSystemArchiveService;
 import de.frank.invoice.worker.infrastructure.ocr.ExternalOcrService;
+import de.frank.invoice.worker.infrastructure.ocr.NoOpOcrService;
+import de.frank.invoice.worker.infrastructure.ocr.OcrService;
+import de.frank.invoice.worker.infrastructure.pdf.MockPdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
 
@@ -36,12 +39,35 @@ public class InvoiceWorkerFactory {
      * @return invoice worker facade
      */
     public InvoiceWorker create(final ApplicationConfiguration configuration) {
+        return create(configuration, false, false);
+    }
+
+    /**
+     * Creates a fully wired invoice worker.
+     *
+     * @param configuration application configuration
+     * @param skipOcr whether external OCR should be skipped for local tests
+     * @return invoice worker facade
+     */
+    public InvoiceWorker create(final ApplicationConfiguration configuration, final boolean skipOcr) {
+        return create(configuration, skipOcr, false);
+    }
+
+    /**
+     * Creates a fully wired invoice worker.
+     *
+     * @param configuration application configuration
+     * @param skipOcr whether external OCR should be skipped for local tests
+     * @param mockText whether PDF text extraction should return deterministic local test text
+     * @return invoice worker facade
+     */
+    public InvoiceWorker create(final ApplicationConfiguration configuration, final boolean skipOcr, final boolean mockText) {
         Objects.requireNonNull(configuration, "configuration must not be null");
 
         final InvoiceRepository invoiceRepository = new SQLiteInvoiceRepository(configuration.persistence().databaseFile());
         final DocumentProcessingWorkflow workflow = new DocumentProcessingWorkflow(
-                new OcrStep(new ExternalOcrService(configuration.ocr()), Path.of("ocr")),
-                new TextExtractionStep(new PdfTextExtractor()),
+                new OcrStep(createOcrService(configuration, skipOcr), Path.of("ocr")),
+                new TextExtractionStep(createPdfTextExtractor(mockText)),
                 new InvoiceExtractionRequestFactory(
                         new ResourcePromptRepository(),
                         new ResourceSchemaRepository(),
@@ -60,5 +86,20 @@ public class InvoiceWorkerFactory {
                 new DocumentImporter(),
                 batchProcessor);
         return new InvoiceWorker(applicationService);
+    }
+
+    PdfTextExtractor createPdfTextExtractor(final boolean mockText) {
+        if (mockText) {
+            return new MockPdfTextExtractor();
+        }
+        return new PdfTextExtractor();
+    }
+
+    OcrService createOcrService(final ApplicationConfiguration configuration, final boolean skipOcr) {
+        Objects.requireNonNull(configuration, "configuration must not be null");
+        if (skipOcr) {
+            return new NoOpOcrService();
+        }
+        return new ExternalOcrService(configuration.ocr());
     }
 }

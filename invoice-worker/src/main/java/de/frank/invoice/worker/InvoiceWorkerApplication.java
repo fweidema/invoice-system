@@ -18,7 +18,10 @@ public class InvoiceWorkerApplication {
      */
     public static void main(final String[] args) {
         final ApplicationConfiguration configuration = new ConfigurationLoader().load();
-        final InvoiceWorker invoiceWorker = new InvoiceWorkerFactory().create(configuration);
+        final InvoiceWorker invoiceWorker = new InvoiceWorkerFactory().create(
+                configuration,
+                InvoiceWorkerCli.skipOcrRequested(args),
+                InvoiceWorkerCli.mockTextRequested(args));
         final int exitCode = new InvoiceWorkerCli(
                 invoiceWorker,
                 configuration.batch().inputDirectory(),

@@ -2,12 +2,15 @@ package de.frank.invoice.worker.cli;
 
 import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.batch.BatchProcessingResult;
+import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
+import de.frank.invoice.worker.domain.invoice.Invoice;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Command line facade for invoice worker processing.
@@ -16,6 +19,8 @@ public class InvoiceWorkerCli {
 
     private static final String PROCESS_COMMAND = "process";
     private static final String INPUT_OPTION = "--input";
+    private static final String SKIP_OCR_OPTION = "--skip-ocr";
+    private static final String MOCK_TEXT_OPTION = "--mock-text";
     private static final int EXIT_SUCCESS = 0;
     private static final int EXIT_ERROR = 1;
 
@@ -67,13 +72,43 @@ public class InvoiceWorkerCli {
     }
 
     private Path resolveInputDirectory(final List<String> arguments) {
-        if (arguments.size() == 1) {
-            return defaultInputDirectory;
+        Path inputDirectory = defaultInputDirectory;
+        int index = 1;
+        while (index < arguments.size()) {
+            final String argument = arguments.get(index);
+            if (INPUT_OPTION.equals(argument)) {
+                if (index + 1 >= arguments.size()) {
+                    return null;
+                }
+                inputDirectory = Path.of(arguments.get(index + 1));
+                index += 2;
+            } else if (SKIP_OCR_OPTION.equals(argument) || MOCK_TEXT_OPTION.equals(argument)) {
+                index++;
+            } else {
+                return null;
+            }
         }
-        if (arguments.size() == 3 && INPUT_OPTION.equals(arguments.get(1))) {
-            return Path.of(arguments.get(2));
-        }
-        return null;
+        return inputDirectory;
+    }
+
+    /**
+     * Checks whether the CLI arguments request local OCR skipping.
+     *
+     * @param args command line arguments
+     * @return true if --skip-ocr is present
+     */
+    public static boolean skipOcrRequested(final String[] args) {
+        return Arrays.asList(Objects.requireNonNull(args, "args must not be null")).contains(SKIP_OCR_OPTION);
+    }
+
+    /**
+     * Checks whether the CLI arguments request deterministic mock PDF text.
+     *
+     * @param args command line arguments
+     * @return true if --mock-text is present
+     */
+    public static boolean mockTextRequested(final String[] args) {
+        return Arrays.asList(Objects.requireNonNull(args, "args must not be null")).contains(MOCK_TEXT_OPTION);
     }
 
     private void printResult(final BatchProcessingResult result) {
@@ -81,9 +116,44 @@ public class InvoiceWorkerCli {
         out.println("Dokumente gesamt: " + result.totalDocuments());
         out.println("Erfolgreich: " + result.successfulDocuments());
         out.println("Fehlgeschlagen: " + result.failedDocuments());
+        printFailedResults(result);
+    }
+
+    private void printFailedResults(final BatchProcessingResult result) {
+        final List<DocumentProcessingResult> failedResults = result.results().stream()
+                .filter(processingResult -> !processingResult.successful())
+                .toList();
+        if (failedResults.isEmpty()) {
+            return;
+        }
+
+        out.println("Fehlgeschlagene Dokumente:");
+        failedResults.forEach(this::printFailedResult);
+    }
+
+    private void printFailedResult(final DocumentProcessingResult result) {
+        documentName(result).ifPresent(documentName -> out.println("- Dokument: " + documentName));
+        out.println("  successful: " + result.successful());
+        out.println("  persisted: " + result.persisted());
+        if (result.duplicateCheckResult() != null) {
+            out.println("  duplicateCheckResult: " + result.duplicateCheckResult());
+        }
+        if (result.archiveResult() != null) {
+            out.println("  archiveResult: " + result.archiveResult());
+        }
+        out.println("  messages:");
+        result.messages().forEach(message -> out.println("    - " + message));
+    }
+
+    private Optional<String> documentName(final DocumentProcessingResult result) {
+        final Invoice invoice = result.invoice();
+        if (invoice == null) {
+            return Optional.empty();
+        }
+        return Optional.of(invoice.document().originalFilename());
     }
 
     private void printHelp() {
-        err.println("Verwendung: process [--input <path>]");
+        err.println("Verwendung: process [--input <path>] [--skip-ocr] [--mock-text]");
     }
 }
