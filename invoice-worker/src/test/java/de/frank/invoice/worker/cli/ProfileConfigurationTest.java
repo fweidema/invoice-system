@@ -41,7 +41,7 @@ class ProfileConfigurationTest {
 
     @Test
     void explicitCliOptionsOverrideProfile() {
-        final CliOptions options = CliOptions.parse(new String[]{"process", "--profile", "production", "--skip-ocr", "--mock-text"});
+        final CliOptions options = CliOptions.parse(new String[]{"process", "--profile", "production", "--config", "application.properties", "--skip-ocr", "--mock-text"});
 
         assertThat(options.profile()).isEqualTo(OperatingProfile.PRODUCTION);
         assertThat(options.skipOcr()).isTrue();

@@ -75,6 +75,9 @@ public record CliOptions(
         if (!explicitMockText) {
             mockText = profile.mockText();
         }
+        if (profile == OperatingProfile.PRODUCTION && configFile == null) {
+            throw new IllegalArgumentException("Profile production requires an external --config file.");
+        }
         return new CliOptions(inputDirectory, configFile, profile, skipOcr, mockText, explicitSkipOcr, explicitMockText);
     }
 

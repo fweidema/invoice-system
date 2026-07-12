@@ -197,11 +197,6 @@ public class InvoiceWorkerCli {
      * Prints command line help.
      */
     public void printHelp() {
-        err.println("Verwendung: process [--input <path>] [--config <path>] [--profile <default|test|production>] [--skip-ocr] [--mock-text]");
-        err.println("Beispiele:");
-        err.println("  process --input input");
-        err.println("  process --config config/application.properties --profile production");
-        err.println("  process --profile test");
+        new CliHelpPrinter().printHelp(err);
     }
 }
-

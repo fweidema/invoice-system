@@ -4,12 +4,14 @@ import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.InvoiceWorkerFactory;
 import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
 import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
+import de.frank.invoice.worker.cli.CliHelpPrinter;
 import de.frank.invoice.worker.cli.CliOptions;
 import de.frank.invoice.worker.cli.ConsoleBatchProcessingListener;
 import de.frank.invoice.worker.cli.InvoiceWorkerCli;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.PrintStream;
 import java.util.Properties;
 
 /**
@@ -30,21 +32,31 @@ public class InvoiceWorkerApplication {
     }
 
     static int run(final String[] args) {
+        return run(
+                args,
+                new ConfigurationLoader(),
+                new InvoiceWorkerFactory(),
+                new CliHelpPrinter(),
+                System.out,
+                System.err);
+    }
+
+    static int run(
+            final String[] args,
+            final ConfigurationLoader configurationLoader,
+            final InvoiceWorkerFactory invoiceWorkerFactory,
+            final CliHelpPrinter helpPrinter,
+            final PrintStream out,
+            final PrintStream err) {
         final CliOptions options;
         try {
             options = CliOptions.parse(args);
         } catch (IllegalArgumentException exception) {
-            System.err.println(exception.getMessage());
-            new InvoiceWorkerCli(
-                    new InvoiceWorkerFactory().create(new ConfigurationLoader().load(), true, true),
-                    new ConfigurationLoader().load(),
-                    System.out,
-                    System.err)
-                    .printHelp();
+            err.println(exception.getMessage());
+            helpPrinter.printHelp(err);
             return InvoiceWorkerCli.EXIT_ERROR;
         }
 
-        final ConfigurationLoader configurationLoader = new ConfigurationLoader();
         final ApplicationConfiguration configuration;
         try {
             final Properties profileProperties = options.profile().properties();
@@ -52,7 +64,7 @@ public class InvoiceWorkerApplication {
                     .map(path -> configurationLoader.load(profileProperties, path))
                     .orElseGet(() -> configurationLoader.load(profileProperties));
         } catch (IllegalArgumentException exception) {
-            System.err.println(exception.getMessage());
+            err.println(exception.getMessage());
             return InvoiceWorkerCli.EXIT_ERROR;
         }
 
@@ -60,8 +72,8 @@ public class InvoiceWorkerApplication {
         final Logger log = LoggerFactory.getLogger(InvoiceWorkerApplication.class);
         log.info("Invoice Worker application starting");
 
-        final ConsoleBatchProcessingListener listener = new ConsoleBatchProcessingListener(System.out);
-        final InvoiceWorker invoiceWorker = new InvoiceWorkerFactory().create(
+        final ConsoleBatchProcessingListener listener = new ConsoleBatchProcessingListener(out);
+        final InvoiceWorker invoiceWorker = invoiceWorkerFactory.create(
                 configuration,
                 options.skipOcr(),
                 options.mockText(),
@@ -69,8 +81,8 @@ public class InvoiceWorkerApplication {
         return new InvoiceWorkerCli(
                 invoiceWorker,
                 configuration,
-                System.out,
-                System.err,
+                out,
+                err,
                 options)
                 .run(args);
     }
