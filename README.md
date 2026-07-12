@@ -63,13 +63,15 @@ Der normale Build benoetigt keinen OpenAI-Key und verursacht keine API-Kosten.
 Grundform:
 
 ```bash
-java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process [--input <path>] [--skip-ocr] [--mock-text]
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process [--input <path>] [--config <path>] [--profile <default|test|production>] [--skip-ocr] [--mock-text]
 ```
 
 Beispiele:
 
 ```bash
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile test
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile production --config config/application.properties
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input --skip-ocr
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input --skip-ocr --mock-text
 ```
@@ -110,7 +112,7 @@ Unter PowerShell:
 $env:OPENAI_API_KEY = "..."
 ```
 
-Weitere Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md).
+Die vollstaendige Konfigurationsreferenz steht in [docs/configuration.md](docs/configuration.md). Weitere OpenAI-Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md).
 
 ## Projektstruktur
 
@@ -135,3 +137,4 @@ invoice-system
 ## Datenschutz
 
 Rechnungstexte koennen personenbezogene oder vertrauliche Daten enthalten. Echte OpenAI-Aufrufe duerfen nur erfolgen, wenn die Verarbeitung dieser Daten fachlich, rechtlich und betrieblich freigegeben ist. Tests verwenden Fake-Dokumente und Mock-AI.
+

@@ -6,6 +6,15 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 
 ### Added
 
+- Externe Properties-Konfiguration ueber `--config`.
+- Betriebsprofile `default`, `test` und `production`.
+- Environment-Overrides fuer produktive Pfade, AI, OCR und Logging.
+- Konfigurierbares `ocr.outputDirectory` und `logging.level`.
+- Beispielkonfiguration unter `config/application-example.properties`.
+- Konfigurationsreferenz unter `docs/configuration.md`.
+- Aussagekraeftige CLI-Exit-Codes fuer vollstaendigen Erfolg, Startfehler und Batch-Fehler.
+
+
 - Produktive OpenAI-Provider-Integration ueber die Responses API mit strukturiertem JSON-Output.
 - Konfigurierbare AI-Provider `mock` und `openai` mit Modell und Temperatur.
 - OpenAI API-Key-Provider ueber `OPENAI_API_KEY`.
@@ -18,6 +27,7 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 - Produktivcode verwendet SLF4J statt direkter Konsolenausgaben ausserhalb der CLI.
 - README, Roadmap und Changelog wurden auf den aktuellen Produktstand gebracht.
 - Projektversion auf `0.2.0-SNAPSHOT` angehoben.
+- Logging-Backend von `slf4j-nop` auf `slf4j-simple` umgestellt.
 
 ### Fixed
 
@@ -42,3 +52,4 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 - Szenario- und Integrationstests mit Fake-Dokumenten.
 - Batch-Verarbeitung und CLI-Fassade.
 - Properties-basierte Anwendungskonfiguration.
+

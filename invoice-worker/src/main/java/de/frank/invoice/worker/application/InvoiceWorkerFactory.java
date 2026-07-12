@@ -28,7 +28,6 @@ import de.frank.invoice.worker.infrastructure.pdf.MockPdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
 
-import java.nio.file.Path;
 import java.util.Objects;
 
 /**
@@ -88,7 +87,7 @@ public class InvoiceWorkerFactory {
 
         final InvoiceRepository invoiceRepository = new SQLiteInvoiceRepository(configuration.persistence().databaseFile());
         final DocumentProcessingWorkflow workflow = new DocumentProcessingWorkflow(
-                new OcrStep(createOcrService(configuration, skipOcr), Path.of("ocr")),
+                new OcrStep(createOcrService(configuration, skipOcr), configuration.ocr().outputDirectory()),
                 new TextExtractionStep(createPdfTextExtractor(mockText)),
                 new InvoiceExtractionRequestFactory(
                         new ResourcePromptRepository(),
@@ -135,3 +134,4 @@ public class InvoiceWorkerFactory {
         return new ExternalOcrService(configuration.ocr());
     }
 }
+

@@ -40,21 +40,22 @@ Unit- und Integrationstests duerfen keine echten OpenAI-Aufrufe ausfuehren und v
 
 ## Produktiver Start
 
-Ein spaeterer produktiver Bootstrap kann Properties wie oben laden und vor dem Start die Umgebung setzen:
+Ein produktiver Start kann ein Profil und eine externe Properties-Datei verwenden:
 
 ```bash
 export OPENAI_API_KEY=...
-java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile production --config config/application.properties
 ```
 
 Unter Windows PowerShell:
 
 ```powershell
 $env:OPENAI_API_KEY = "..."
-java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile production --config config/application.properties
 ```
 
 ## Datenschutz
 
 Rechnungstexte koennen personenbezogene oder vertrauliche Daten enthalten. Der OpenAI-Provider sollte nur verwendet werden, wenn die Verarbeitung dieser Daten mit den geltenden Datenschutz-, Vertrags- und Betriebsanforderungen vereinbar ist. Keine echten Rechnungen fuer Tests oder Beispiele verwenden.
+
 

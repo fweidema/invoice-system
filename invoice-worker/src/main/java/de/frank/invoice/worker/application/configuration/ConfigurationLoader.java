@@ -1,34 +1,81 @@
 package de.frank.invoice.worker.application.configuration;
 
+import java.io.IOException;
+import java.io.Reader;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
+import java.util.function.Function;
 
 /**
- * Loads the central application configuration.
+ * Loads the central application configuration from defaults, properties files and environment variables.
  */
 public class ConfigurationLoader {
-    private static final String ARCHIVE_DIRECTORY = "archive.directory";
-    private static final String PERSISTENCE_DATABASE_FILE = "persistence.databaseFile";
-    private static final String OCR_LANGUAGE = "ocr.language";
-    private static final String OCR_COMMAND = "ocr.command";
-    private static final String AI_PROVIDER = "ai.provider";
-    private static final String AI_MODEL = "ai.model";
-    private static final String AI_TEMPERATURE = "ai.temperature";
-    private static final String BATCH_INPUT_DIRECTORY = "batch.inputDirectory";
-    private static final String BATCH_RECURSIVE = "batch.recursive";
+    public static final String ARCHIVE_DIRECTORY = "archive.directory";
+    public static final String PERSISTENCE_DATABASE_FILE = "persistence.databaseFile";
+    public static final String OCR_LANGUAGE = "ocr.language";
+    public static final String OCR_COMMAND = "ocr.command";
+    public static final String OCR_OUTPUT_DIRECTORY = "ocr.outputDirectory";
+    public static final String AI_PROVIDER = "ai.provider";
+    public static final String AI_MODEL = "ai.model";
+    public static final String AI_TEMPERATURE = "ai.temperature";
+    public static final String BATCH_INPUT_DIRECTORY = "batch.inputDirectory";
+    public static final String BATCH_RECURSIVE = "batch.recursive";
+    public static final String LOGGING_LEVEL = "logging.level";
+
+    private static final Map<String, String> ENVIRONMENT_MAPPING = Map.ofEntries(
+            Map.entry("INVOICE_AI_PROVIDER", AI_PROVIDER),
+            Map.entry("INVOICE_AI_MODEL", AI_MODEL),
+            Map.entry("INVOICE_AI_TEMPERATURE", AI_TEMPERATURE),
+            Map.entry("INVOICE_ARCHIVE_DIRECTORY", ARCHIVE_DIRECTORY),
+            Map.entry("INVOICE_DATABASE_FILE", PERSISTENCE_DATABASE_FILE),
+            Map.entry("INVOICE_INPUT_DIRECTORY", BATCH_INPUT_DIRECTORY),
+            Map.entry("INVOICE_OCR_COMMAND", OCR_COMMAND),
+            Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
+            Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
+            Map.entry("INVOICE_LOG_LEVEL", LOGGING_LEVEL));
+
+    private final Function<String, String> environmentLookup;
 
     /**
-     * Loads application configuration using internal defaults.
+     * Creates a configuration loader backed by process environment variables.
+     */
+    public ConfigurationLoader() {
+        this(System::getenv);
+    }
+
+    /**
+     * Creates a configuration loader with an explicit environment lookup.
+     *
+     * @param environmentLookup environment lookup function
+     */
+    public ConfigurationLoader(final Function<String, String> environmentLookup) {
+        this.environmentLookup = Objects.requireNonNull(environmentLookup, "environmentLookup must not be null");
+    }
+
+    /**
+     * Loads application configuration using internal defaults and environment variables.
      *
      * @return application configuration
      */
     public ApplicationConfiguration load() {
-        return load(defaultProperties());
+        return load(new Properties());
     }
 
     /**
-     * Loads application configuration from the provided properties overlaid on defaults.
+     * Loads application configuration from an external properties file.
+     *
+     * @param propertiesFile properties file path
+     * @return application configuration
+     */
+    public ApplicationConfiguration load(final Path propertiesFile) {
+        return load(new Properties(), propertiesFile);
+    }
+
+    /**
+     * Loads application configuration from profile/default overlay properties.
      *
      * @param properties configuration properties
      * @return application configuration
@@ -37,26 +84,77 @@ public class ConfigurationLoader {
         Objects.requireNonNull(properties, "properties must not be null");
         final Properties mergedProperties = defaultProperties();
         mergedProperties.putAll(properties);
-        return new ApplicationConfiguration(
-                archive(mergedProperties),
-                persistence(mergedProperties),
-                ocr(mergedProperties),
-                ai(mergedProperties),
-                batch(mergedProperties));
+        applyEnvironment(mergedProperties);
+        return configuration(mergedProperties);
     }
 
-    private Properties defaultProperties() {
+    /**
+     * Loads application configuration from profile properties and an external properties file.
+     *
+     * @param profileProperties profile property overlay
+     * @param propertiesFile properties file path
+     * @return application configuration
+     */
+    public ApplicationConfiguration load(final Properties profileProperties, final Path propertiesFile) {
+        Objects.requireNonNull(profileProperties, "profileProperties must not be null");
+        Objects.requireNonNull(propertiesFile, "propertiesFile must not be null");
+        if (!Files.exists(propertiesFile)) {
+            throw new IllegalArgumentException("Configuration file does not exist: " + propertiesFile);
+        }
+        if (!Files.isRegularFile(propertiesFile) || !Files.isReadable(propertiesFile)) {
+            throw new IllegalArgumentException("Configuration file is not readable: " + propertiesFile);
+        }
+        final Properties fileProperties = new Properties();
+        try (Reader reader = Files.newBufferedReader(propertiesFile)) {
+            fileProperties.load(reader);
+        } catch (IOException exception) {
+            throw new IllegalArgumentException("Could not read configuration file: " + propertiesFile, exception);
+        }
+        final Properties mergedProperties = defaultProperties();
+        mergedProperties.putAll(profileProperties);
+        mergedProperties.putAll(fileProperties);
+        applyEnvironment(mergedProperties);
+        return configuration(mergedProperties);
+    }
+
+    /**
+     * Returns internal default properties.
+     *
+     * @return default properties
+     */
+    public Properties defaultProperties() {
         final Properties properties = new Properties();
         properties.setProperty(ARCHIVE_DIRECTORY, "archive");
         properties.setProperty(PERSISTENCE_DATABASE_FILE, "data/invoice-system.db");
         properties.setProperty(OCR_LANGUAGE, "deu");
         properties.setProperty(OCR_COMMAND, "ocrmypdf");
+        properties.setProperty(OCR_OUTPUT_DIRECTORY, "ocr");
         properties.setProperty(AI_PROVIDER, AiConfiguration.PROVIDER_MOCK);
         properties.setProperty(AI_MODEL, "gpt-5");
         properties.setProperty(AI_TEMPERATURE, "0.0");
         properties.setProperty(BATCH_INPUT_DIRECTORY, "input");
         properties.setProperty(BATCH_RECURSIVE, "false");
+        properties.setProperty(LOGGING_LEVEL, LoggingConfiguration.DEFAULT_LEVEL);
         return properties;
+    }
+
+    private ApplicationConfiguration configuration(final Properties properties) {
+        return new ApplicationConfiguration(
+                archive(properties),
+                persistence(properties),
+                ocr(properties),
+                ai(properties),
+                batch(properties),
+                logging(properties));
+    }
+
+    private void applyEnvironment(final Properties properties) {
+        ENVIRONMENT_MAPPING.forEach((environmentName, propertyName) -> {
+            final String value = environmentLookup.apply(environmentName);
+            if (value != null && !value.isBlank()) {
+                properties.setProperty(propertyName, value.trim());
+            }
+        });
     }
 
     private ArchiveConfiguration archive(final Properties properties) {
@@ -68,7 +166,10 @@ public class ConfigurationLoader {
     }
 
     private OcrConfiguration ocr(final Properties properties) {
-        return new OcrConfiguration(text(properties, OCR_LANGUAGE), text(properties, OCR_COMMAND));
+        return new OcrConfiguration(
+                text(properties, OCR_LANGUAGE),
+                text(properties, OCR_COMMAND),
+                path(properties, OCR_OUTPUT_DIRECTORY));
     }
 
     private AiConfiguration ai(final Properties properties) {
@@ -81,7 +182,11 @@ public class ConfigurationLoader {
     private BatchConfiguration batch(final Properties properties) {
         return new BatchConfiguration(
                 path(properties, BATCH_INPUT_DIRECTORY),
-                Boolean.parseBoolean(text(properties, BATCH_RECURSIVE)));
+                bool(properties, BATCH_RECURSIVE));
+    }
+
+    private LoggingConfiguration logging(final Properties properties) {
+        return new LoggingConfiguration(text(properties, LOGGING_LEVEL));
     }
 
     private double temperature(final Properties properties) {
@@ -91,6 +196,17 @@ public class ConfigurationLoader {
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Configuration property must be a valid number: " + AI_TEMPERATURE, exception);
         }
+    }
+
+    private boolean bool(final Properties properties, final String key) {
+        final String value = text(properties, key);
+        if ("true".equalsIgnoreCase(value)) {
+            return true;
+        }
+        if ("false".equalsIgnoreCase(value)) {
+            return false;
+        }
+        throw new IllegalArgumentException("Configuration property must be true or false: " + key);
     }
 
     private Path path(final Properties properties, final String key) {

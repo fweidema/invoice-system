@@ -44,7 +44,7 @@ class InvoiceWorkerCliTest {
     @Test
     void processWithInputOptionIsAccepted() {
         // Arrange
-        final CliFixture fixture = fixture(result(2, 1));
+        final CliFixture fixture = fixture(result(1, 0));
         final Path inputDirectory = tempDirectory.resolve("input");
 
         // Act
@@ -65,9 +65,64 @@ class InvoiceWorkerCliTest {
 
         // Assert
         assertThat(exitCode).isEqualTo(1);
-        assertThat(fixture.error()).contains("Verwendung: process [--input <path>] [--skip-ocr] [--mock-text]");
+        assertThat(fixture.error()).contains("--config <path>");
+        assertThat(fixture.error()).contains("--profile <default|test|production>");
     }
 
+    @Test
+    void processWithConfigOptionIsAcceptedWhenFileExists() throws Exception {
+        // Arrange
+        final CliFixture fixture = fixture(result(1, 0));
+        final Path configFile = tempDirectory.resolve("application.properties");
+        java.nio.file.Files.writeString(configFile, "ai.provider=mock\n");
+
+        // Act
+        final int exitCode = fixture.cli().run(new String[]{"process", "--config", configFile.toString()});
+
+        // Assert
+        assertThat(exitCode).isZero();
+    }
+
+    @Test
+    void missingConfigFileReturnsError() {
+        // Arrange
+        final CliFixture fixture = fixture(result(1, 0));
+        final Path configFile = tempDirectory.resolve("missing.properties");
+
+        // Act
+        final int exitCode = fixture.cli().run(new String[]{"process", "--config", configFile.toString()});
+
+        // Assert
+        assertThat(exitCode).isEqualTo(1);
+        assertThat(fixture.error()).contains("Configuration file does not exist");
+    }
+
+    @Test
+    void processWithTestProfileIsAccepted() {
+        // Arrange
+        final CliFixture fixture = fixture(result(1, 0));
+
+        // Act
+        final int exitCode = fixture.cli().run(new String[]{"process", "--profile", "test"});
+
+        // Assert
+        assertThat(exitCode).isZero();
+        assertThat(InvoiceWorkerCli.skipOcrRequested(new String[]{"process", "--profile", "test"})).isTrue();
+        assertThat(InvoiceWorkerCli.mockTextRequested(new String[]{"process", "--profile", "test"})).isTrue();
+    }
+
+    @Test
+    void unknownProfileReturnsError() {
+        // Arrange
+        final CliFixture fixture = fixture(result(1, 0));
+
+        // Act
+        final int exitCode = fixture.cli().run(new String[]{"process", "--profile", "other"});
+
+        // Assert
+        assertThat(exitCode).isEqualTo(1);
+        assertThat(fixture.error()).contains("Unknown profile");
+    }
     @Test
     void processWithSkipOcrOptionIsAccepted() {
         // Arrange
@@ -153,7 +208,7 @@ class InvoiceWorkerCliTest {
         final int exitCode = fixture.cli().run(new String[]{"process"});
 
         // Assert
-        assertThat(exitCode).isZero();
+        assertThat(exitCode).isEqualTo(2);
         assertThat(fixture.output()).contains("Zusammenfassung");
         assertThat(fixture.output()).contains("Gesamt: 3");
         assertThat(fixture.output()).contains("Erfolgreich: 2");
@@ -195,6 +250,7 @@ class InvoiceWorkerCliTest {
         assertThat(output).contains("[1/2] invoice-a.pdf");
         assertThat(output).contains("Batch beendet.");
     }
+
     @Test
     void processOutputContainsFailedDocumentDetailsAndMessages() {
         // Arrange
@@ -210,7 +266,7 @@ class InvoiceWorkerCliTest {
         final int exitCode = fixture.cli().run(new String[]{"process"});
 
         // Assert
-        assertThat(exitCode).isZero();
+        assertThat(exitCode).isEqualTo(2);
         assertThat(fixture.output()).contains("Fehlgeschlagene Dokumente:");
         assertThat(fixture.output()).contains("- Dokument: failed-invoice.pdf");
         assertThat(fixture.output()).contains("  successful: false");
@@ -352,6 +408,9 @@ class InvoiceWorkerCliTest {
         }
     }
 }
+
+
+
 
 
 

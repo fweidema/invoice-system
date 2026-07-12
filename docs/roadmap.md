@@ -26,6 +26,7 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 - [x] Sprint 021: CLI Facade
 - [x] Sprint 022: OpenAI Provider Integration
 - [x] Sprint 023: Production Readiness and Technical Cleanup
+- [x] Sprint 024: External Configuration and Operating Profiles
 
 ## Aktueller Stand
 
@@ -33,7 +34,6 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 
 ## Naechste Schritte
 
-- Externe Properties-Datei oder explizite CLI-Konfigurationsoption ergaenzen.
 - Optionalen OpenAI-Integrationstest hinter Profil oder Tag ergaenzen.
 - Operative Fehlercodes und CLI-Exit-Codes weiter schaerfen.
 - Backup- und Wartungskonzept fuer SQLite und Archiv dokumentieren.
@@ -48,3 +48,4 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 - Kostenabrechnung und Tokenstatistik
 - Multi-Tenant-Unterstuetzung
 - Weitere AI-Provider
+

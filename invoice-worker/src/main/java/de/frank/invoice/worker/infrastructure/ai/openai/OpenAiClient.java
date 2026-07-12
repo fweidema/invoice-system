@@ -75,11 +75,12 @@ public class OpenAiClient implements AiClient {
             LOG.debug("OpenAI analysis durationMs={}", Duration.between(startedAt, Instant.now()).toMillis());
             return new AiClientResponse(responseText, request.model(), PROVIDER);
         } catch (OpenAiException exception) {
-            LOG.error("OpenAI analysis failed with model {}", request.model(), exception);
+            LOG.error("OpenAI analysis failed with model {}", request.model());
             throw exception;
         } catch (RuntimeException exception) {
-            LOG.error("OpenAI analysis failed with model {}", request.model(), exception);
+            LOG.error("OpenAI analysis failed with model {}", request.model());
             throw new OpenAiException("OpenAI request failed due to an unexpected technical error.", exception);
         }
     }
 }
+
