@@ -19,7 +19,6 @@ public class InvoiceMapper {
     private static final Currency DEFAULT_CURRENCY = Currency.getInstance("EUR");
     private static final String UNKNOWN_SUPPLIER_NAME = "";
     private static final String UNKNOWN_ADDRESS_VALUE = "";
-    private static final BigDecimal UNKNOWN_AMOUNT = BigDecimal.ZERO;
 
     /**
      * Maps an invoice extraction response and its source document to an invoice domain object.
@@ -66,7 +65,10 @@ public class InvoiceMapper {
     }
 
     private Money createMoney(final BigDecimal amount, final Currency currency) {
-        return new Money(amount == null ? UNKNOWN_AMOUNT : amount, currency);
+        if (amount == null) {
+            return null;
+        }
+        return new Money(amount, currency);
     }
 
     private Currency resolveCurrency(final String currencyCode) {

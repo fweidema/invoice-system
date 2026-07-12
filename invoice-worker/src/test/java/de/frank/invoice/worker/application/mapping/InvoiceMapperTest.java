@@ -40,6 +40,32 @@ class InvoiceMapperTest {
     }
 
     @Test
+    void mapKeepsMissingAmountsAsNull() {
+        // Arrange
+        final InvoiceExtractionResponse response = new InvoiceExtractionResponse(
+                "Supplier GmbH",
+                "INV-2026-001",
+                "2026-06-27",
+                null,
+                null,
+                null,
+                new BigDecimal("99.20"),
+                "EUR",
+                null,
+                null,
+                null,
+                List.of());
+
+        // Act
+        final Invoice invoice = invoiceMapper.map(createDocument(), response);
+
+        // Assert
+        assertThat(invoice.netAmount()).isNull();
+        assertThat(invoice.vatAmount()).isNull();
+        assertThat(invoice.grossAmount().amount()).isEqualByComparingTo(new BigDecimal("99.20"));
+    }
+
+    @Test
     void mapUsesEuroAsDefaultCurrencyWhenCurrencyIsNull() {
         // Arrange
         final InvoiceExtractionResponse response = createResponse(null);

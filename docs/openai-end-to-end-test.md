@@ -143,7 +143,14 @@ sqlite3 runtime/database/invoice-system.db "PRAGMA table_info(invoices);"
 
 Zeige danach den neuesten Datensatz mit einer zur tatsaechlichen Tabelle passenden SQL-Abfrage an. Keine privaten oder sensiblen Daten in ein versioniertes Protokoll uebernehmen.
 
-## Fachliche Pruefung
+## Rechnungen ohne getrennte Netto-/Umsatzsteuer-Angabe
+
+Manche Rechnungen weisen nur den Bruttobetrag aus. In diesem Fall bleibt die Rechnung verarbeitbar, solange die Pflichtfelder vorhanden sind.
+
+- Der Bruttobetrag kann allein ausgewiesen sein.
+- Die Konsistenzpruefung erfolgt nur bei vollstaendigen Betragsbestandteilen, also wenn Netto, Umsatzsteuer und Brutto alle vorhanden sind.
+- Eine eindeutig im Kopfbereich beschriftete Rechnungsnummer wird gegenueber spaeteren, OCR-fehlerhaften Wiederholungen priorisiert.
+
 
 Mindestens diese Felder mit der Fake-Rechnung vergleichen:
 

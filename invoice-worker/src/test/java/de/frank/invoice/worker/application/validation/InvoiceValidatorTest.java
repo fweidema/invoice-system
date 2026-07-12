@@ -97,10 +97,57 @@ class InvoiceValidatorTest {
     }
 
     @Test
-    void validateReturnsWarningWhenGrossAmountDoesNotMatchNetPlusVat() {
+    void validateDoesNotWarnAboutGrossAmountWhenNetAndVatAreMissing() {
         // Act
         final ValidationResult result = validator.validate(validInvoiceBuilder()
-                .grossAmount(new Money(new BigDecimal("130.00"), EUR))
+                .netAmount(null)
+                .vatAmount(null)
+                .grossAmount(new Money(new BigDecimal("99.20"), EUR))
+                .build());
+
+        // Assert
+        assertThat(result.messages())
+                .noneMatch(message -> message.field().equals("grossAmount")
+                        && message.severity() == ValidationSeverity.WARNING);
+    }
+
+    @Test
+    void validateDoesNotWarnAboutGrossAmountWhenVatIsMissing() {
+        // Act
+        final ValidationResult result = validator.validate(validInvoiceBuilder()
+                .netAmount(new Money(new BigDecimal("99.20"), EUR))
+                .vatAmount(null)
+                .grossAmount(new Money(new BigDecimal("99.20"), EUR))
+                .build());
+
+        // Assert
+        assertThat(result.messages())
+                .noneMatch(message -> message.field().equals("grossAmount")
+                        && message.severity() == ValidationSeverity.WARNING);
+    }
+
+    @Test
+    void validateDoesNotWarnAboutGrossAmountWhenAllAmountsMatch() {
+        // Act
+        final ValidationResult result = validator.validate(validInvoiceBuilder()
+                .netAmount(new Money(new BigDecimal("100.00"), EUR))
+                .vatAmount(new Money(new BigDecimal("19.00"), EUR))
+                .grossAmount(new Money(new BigDecimal("119.00"), EUR))
+                .build());
+
+        // Assert
+        assertThat(result.messages())
+                .noneMatch(message -> message.field().equals("grossAmount")
+                        && message.severity() == ValidationSeverity.WARNING);
+    }
+
+    @Test
+    void validateKeepsGrossAmountWarningForInconsistentAmounts() {
+        // Act
+        final ValidationResult result = validator.validate(validInvoiceBuilder()
+                .netAmount(new Money(new BigDecimal("100.00"), EUR))
+                .vatAmount(new Money(new BigDecimal("19.00"), EUR))
+                .grossAmount(new Money(new BigDecimal("120.00"), EUR))
                 .build());
 
         // Assert
@@ -203,6 +250,11 @@ class InvoiceValidatorTest {
 
         InvoiceBuilder netAmount(final Money netAmount) {
             this.netAmount = netAmount;
+            return this;
+        }
+
+        InvoiceBuilder vatAmount(final Money vatAmount) {
+            this.vatAmount = vatAmount;
             return this;
         }
 

@@ -17,6 +17,8 @@ class ResourcePromptRepositoryTest {
         // Assert
         assertThat(prompt).isNotBlank();
         assertThat(prompt).contains("Rechnungsdaten");
+        assertThat(prompt).contains("Bevorzuge die Nummer direkt neben oder unter der Bezeichnung");
+        assertThat(prompt).contains("Bei widerspruechlichen OCR-Werten priorisiere die semantisch eindeutig beschriftete Fundstelle");
     }
 
     @Test
