@@ -57,10 +57,30 @@ class OpenAiClientTest {
         // Assert
         final JsonNode requestBody = objectMapper.readTree(transport.requestBody);
         assertThat(requestBody.path("model").asText()).isEqualTo("gpt-test");
+        assertThat(requestBody.path("temperature").asDouble()).isZero();
         assertThat(requestBody.path("input").get(0).path("role").asText()).isEqualTo("system");
         assertThat(requestBody.path("input").get(0).path("content").asText()).isEqualTo("prompt text");
         assertThat(requestBody.path("input").get(1).path("role").asText()).isEqualTo("user");
         assertThat(requestBody.path("input").get(1).path("content").asText()).isEqualTo("document text");
+        assertThat(requestBody.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
+        assertThat(requestBody.path("text").path("format").path("name").asText()).isEqualTo("invoice_extraction");
+        assertThat(requestBody.path("text").path("format").path("strict").asBoolean()).isTrue();
+        assertThat(requestBody.path("text").path("format").path("schema").path("type").asText()).isEqualTo("object");
+    }
+
+    @Test
+    void analyzeOmitsTemperatureForGpt5Models() throws Exception {
+        // Arrange
+        final CapturingTransport transport = new CapturingTransport(API_RESPONSE);
+        final OpenAiClient client = client(transport);
+
+        // Act
+        client.analyze(createRequest("gpt-5"));
+
+        // Assert
+        final JsonNode requestBody = objectMapper.readTree(transport.requestBody);
+        assertThat(requestBody.path("model").asText()).isEqualTo("gpt-5");
+        assertThat(requestBody.has("temperature")).isFalse();
         assertThat(requestBody.path("text").path("format").path("type").asText()).isEqualTo("json_schema");
         assertThat(requestBody.path("text").path("format").path("name").asText()).isEqualTo("invoice_extraction");
         assertThat(requestBody.path("text").path("format").path("strict").asBoolean()).isTrue();
@@ -142,7 +162,11 @@ class OpenAiClientTest {
     }
 
     private AiClientRequest createRequest() {
-        return new AiClientRequest("prompt text", "{\"type\":\"object\"}", "document text", "gpt-test");
+        return createRequest("gpt-test");
+    }
+
+    private AiClientRequest createRequest(final String model) {
+        return new AiClientRequest("prompt text", "{\"type\":\"object\"}", "document text", model);
     }
 
     private static final class CapturingTransport implements OpenAiTransport {

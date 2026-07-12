@@ -7,6 +7,7 @@ import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import de.frank.invoice.worker.application.ai.AiClientRequest;
 
+import java.util.Locale;
 import java.util.Objects;
 
 final class OpenAiRequestFactory {
@@ -34,13 +35,19 @@ final class OpenAiRequestFactory {
             final JsonNode schema = objectMapper.readTree(request.schema());
             final ObjectNode body = objectMapper.createObjectNode();
             body.put("model", request.model());
-            body.put("temperature", temperature);
+            if (supportsTemperature(request.model())) {
+                body.put("temperature", temperature);
+            }
             body.set("input", input(request));
             body.set("text", textConfiguration(schema));
             return objectMapper.writeValueAsString(body);
         } catch (JsonProcessingException exception) {
             throw new OpenAiException("OpenAI request contains an invalid JSON schema.", exception);
         }
+    }
+
+    private boolean supportsTemperature(final String model) {
+        return model != null && !model.toLowerCase(Locale.ROOT).startsWith("gpt-5");
     }
 
     private ArrayNode input(final AiClientRequest request) {
