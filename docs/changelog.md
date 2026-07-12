@@ -22,6 +22,8 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 - OpenAI API-Key-Provider ueber `OPENAI_API_KEY`.
 - Batch-Fortschrittsanzeige fuer die CLI.
 - Dokumentation fuer OpenAI-Konfiguration und Architekturuebersicht.
+- Dokumentation fuer den kontrollierten OpenAI-End-to-End-Test mit genau einem Fake- oder anonymisierten Dokument.
+- Testprotokoll-Vorlage fuer OpenAI-End-to-End-Laeufe ohne Secrets und ohne private Daten.
 
 ### Changed
 
@@ -35,6 +37,7 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 
 - Veraltete Bootstrap-Demo-Klassen aus dem Root-Projekt entfernt.
 - Lokale Secret-Dateien werden ueber `.gitignore` ausgeschlossen.
+- Lokale Backup-Verzeichnisse werden ueber `.gitignore` ausgeschlossen.
 
 ## [0.1.0] - Unreleased
 

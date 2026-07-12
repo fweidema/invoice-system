@@ -55,6 +55,7 @@ Thumbs.db
 
 
 runtime/
+backup/
 *.db
 *.sqlite
 logs/

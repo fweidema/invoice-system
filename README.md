@@ -112,7 +112,7 @@ Unter PowerShell:
 $env:OPENAI_API_KEY = "..."
 ```
 
-Die vollstaendige Konfigurationsreferenz steht in [docs/configuration.md](docs/configuration.md). Weitere OpenAI-Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md).
+Die vollstaendige Konfigurationsreferenz steht in [docs/configuration.md](docs/configuration.md). Weitere OpenAI-Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md). Der kontrollierte Ein-Dokument-Test fuer echten OpenAI-Betrieb ist in [docs/openai-end-to-end-test.md](docs/openai-end-to-end-test.md) beschrieben.
 
 ## Projektstruktur
 
@@ -148,7 +148,7 @@ docker compose run --rm invoice-worker
 
 Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
 
-Details stehen in [docs/vps-deployment.md](docs/vps-deployment.md), Backup-Hinweise in [docs/backup-and-restore.md](docs/backup-and-restore.md).
+Details stehen in [docs/vps-deployment.md](docs/vps-deployment.md), Backup-Hinweise in [docs/backup-and-restore.md](docs/backup-and-restore.md). Fuer Sprint-027-Protokolle ohne Secrets und ohne private Daten steht [docs/test-reports/openai-e2e-template.md](docs/test-reports/openai-e2e-template.md) bereit.
 
 ## Datenschutz
 
