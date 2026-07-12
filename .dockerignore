@@ -1,0 +1,17 @@
+.git
+.idea
+.vscode
+target
+**/target
+runtime
+*.db
+*.sqlite
+.env
+.env.*
+logs
+archive
+input
+ocr
+*.log
+hs_err_pid*
+replay_pid*

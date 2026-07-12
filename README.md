@@ -134,7 +134,22 @@ invoice-system
     `-- codex-tasks
 ```
 
+
+## Docker-Schnellstart
+
+Der Worker kann als einzelner Docker-Container mit persistenter Runtime-Struktur betrieben werden. Der produktionsnahe Mock-Test nutzt weiterhin `ai.provider=mock` und benoetigt keinen OpenAI-Key.
+
+```bash
+./scripts/prepare-runtime.sh
+docker compose build
+./scripts/container-self-check.sh
+docker compose run --rm invoice-worker
+```
+
+Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
+
+Details stehen in [docs/vps-deployment.md](docs/vps-deployment.md), Backup-Hinweise in [docs/backup-and-restore.md](docs/backup-and-restore.md).
+
 ## Datenschutz
 
 Rechnungstexte koennen personenbezogene oder vertrauliche Daten enthalten. Echte OpenAI-Aufrufe duerfen nur erfolgen, wenn die Verarbeitung dieser Daten fachlich, rechtlich und betrieblich freigegeben ist. Tests verwenden Fake-Dokumente und Mock-AI.
-

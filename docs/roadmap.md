@@ -27,6 +27,7 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 - [x] Sprint 022: OpenAI Provider Integration
 - [x] Sprint 023: Production Readiness and Technical Cleanup
 - [x] Sprint 024: External Configuration and Operating Profiles
+- [x] Sprint 025: Docker- und VPS-Deployment
 
 ## Aktueller Stand
 
@@ -36,7 +37,6 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 
 - Optionalen OpenAI-Integrationstest hinter Profil oder Tag ergaenzen.
 - Operative Fehlercodes und CLI-Exit-Codes weiter schaerfen.
-- Backup- und Wartungskonzept fuer SQLite und Archiv dokumentieren.
 - REST-API erst nach stabiler CLI- und Konfigurationsbasis planen.
 - Web UI erst nach REST-API und Betriebsmodell bewerten.
 
@@ -44,8 +44,6 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 
 - Scheduler
 - n8n-Integration
-- Docker- oder VPS-Deployment
 - Kostenabrechnung und Tokenstatistik
 - Multi-Tenant-Unterstuetzung
 - Weitere AI-Provider
-

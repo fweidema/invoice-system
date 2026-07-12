@@ -6,6 +6,10 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 
 ### Added
 
+- Docker-Multi-Stage-Build mit Java 21, OCRmyPDF und Tesseract fuer VPS-Betrieb.
+- Docker-Compose-Konfiguration mit persistenten Runtime-Volumes und read-only Properties-Datei.
+- Runtime-Vorbereitungs- und Container-Self-Check-Skripte.
+- VPS-Deployment- sowie Backup- und Restore-Dokumentation.
 - Externe Properties-Konfiguration ueber `--config`.
 - Betriebsprofile `default`, `test` und `production`.
 - Environment-Overrides fuer produktive Pfade, AI, OCR und Logging.
@@ -13,8 +17,6 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 - Beispielkonfiguration unter `config/application-example.properties`.
 - Konfigurationsreferenz unter `docs/configuration.md`.
 - Aussagekraeftige CLI-Exit-Codes fuer vollstaendigen Erfolg, Startfehler und Batch-Fehler.
-
-
 - Produktive OpenAI-Provider-Integration ueber die Responses API mit strukturiertem JSON-Output.
 - Konfigurierbare AI-Provider `mock` und `openai` mit Modell und Temperatur.
 - OpenAI API-Key-Provider ueber `OPENAI_API_KEY`.
@@ -52,4 +54,3 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 - Szenario- und Integrationstests mit Fake-Dokumenten.
 - Batch-Verarbeitung und CLI-Fassade.
 - Properties-basierte Anwendungskonfiguration.
-

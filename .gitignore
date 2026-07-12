@@ -53,3 +53,11 @@ Thumbs.db
 .env.*
 !.env.example
 
+
+runtime/
+*.db
+*.sqlite
+logs/
+archive/
+input/
+ocr/
