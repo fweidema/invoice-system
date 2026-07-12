@@ -1,64 +1,50 @@
 # Roadmap
 
-Diese Roadmap beschreibt die geplanten Entwicklungsschritte fuer
-**invoice-system**. Die Reihenfolge ist fachlich motiviert und kann angepasst
-werden, wenn neue Erkenntnisse aus Implementierung oder Review entstehen.
+Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwicklungsschritte fuer **invoice-system**.
 
-## Phase 1: Projektgrundlage
+## Abgeschlossen
 
-- Maven-Multi-Module-Projekt einrichten.
-- Java 21 als Laufzeit und Compiler-Ziel festlegen.
-- Grundlegende Dokumentationsstruktur anlegen.
-- Entwicklungsprozess und Architekturentscheidungen dokumentieren.
+- [x] Sprint 001: Domain Model
+- [x] Sprint 002: Project Documentation
+- [x] Sprint 003: Document Import Pipeline
+- [x] Sprint 004: OCR Text Extraction
+- [x] Sprint 005: AI Abstraction
+- [x] Sprint 006: Classification / Extraction Split
+- [x] Sprint 007: Architecture Refactoring
+- [x] Sprint 008: Prompt and Schema Management
+- [x] Sprint 009: AI Infrastructure
+- [x] Sprint 010: AI Request / Response
+- [x] Sprint 011: Invoice Domain Mapping
+- [x] Sprint 012: Invoice Validation
+- [x] Sprint 013: Document Processing Workflow
+- [x] Sprint 014: SQLite Persistence
+- [x] Sprint 016: Duplicate Detection
+- [x] Sprint 017: Archive Service
+- [x] Sprint 018: Document Scenarios
+- [x] Sprint 019: Batch Processing
+- [x] Sprint 020: Configuration
+- [x] Sprint 021: CLI Facade
+- [x] Sprint 022: OpenAI Provider Integration
+- [x] Sprint 023: Production Readiness and Technical Cleanup
 
-Status: begonnen.
+## Aktueller Stand
 
-## Phase 2: Domaenenmodell
+`invoice-worker` kann lokal PDF-Dokumente importieren, optional OCR ausfuehren, Rechnungsdaten ueber Mock-AI oder OpenAI analysieren, Ergebnisse validieren, Dubletten erkennen, in SQLite persistieren und Dokumente im Dateisystem archivieren.
 
-- Dokumente und Dokumenttypen modellieren.
-- Geldwerte, Lieferanten, Rechnungen, Positionen und Umsatzsteuerdaten modellieren.
-- Verarbeitungsstatus und Verarbeitungsergebnis modellieren.
-- Domaenenmodell frei von Persistenz-, REST- und KI-Logik halten.
+## Naechste Schritte
 
-Status: umgesetzt.
+- Externe Properties-Datei oder explizite CLI-Konfigurationsoption ergaenzen.
+- Optionalen OpenAI-Integrationstest hinter Profil oder Tag ergaenzen.
+- Operative Fehlercodes und CLI-Exit-Codes weiter schaerfen.
+- Backup- und Wartungskonzept fuer SQLite und Archiv dokumentieren.
+- REST-API erst nach stabiler CLI- und Konfigurationsbasis planen.
+- Web UI erst nach REST-API und Betriebsmodell bewerten.
 
-## Phase 3: Dokumentenimport
+## Zurueckgestellt
 
-- Eingangsverzeichnis verarbeiten.
-- Dokumentmetadaten erfassen.
-- Dateihashes berechnen.
-- Fehlerfaelle beim Import nachvollziehbar abbilden.
-
-Status: geplant.
-
-## Phase 4: OCR und Textextraktion
-
-- OCR-Ergebnisse einem Dokument zuordnen.
-- Extrahierten Text strukturiert bereitstellen.
-- Verarbeitungsschritte protokollierbar machen.
-
-Status: geplant.
-
-## Phase 5: KI-Analyse
-
-- Anbieterabstraktion fuer KI-Dienste einfuehren.
-- Rechnungsdaten aus Dokumenttexten extrahieren.
-- Ergebnisse validieren und Warnungen sichtbar machen.
-
-Status: geplant.
-
-## Phase 6: Persistenz und Ablage
-
-- Persistenzschicht einfuehren.
-- Verarbeitete Dokumente archivieren.
-- Such- und Wiederauffindbarkeit vorbereiten.
-
-Status: geplant.
-
-## Phase 7: Schnittstellen und Betrieb
-
-- REST-API fuer ausgewaehlte Anwendungsfaelle bereitstellen.
-- Web UI fuer Dokumente und Verarbeitungsergebnisse pruefen.
-- Backup-, Konfigurations- und Betriebsaspekte dokumentieren.
-
-Status: geplant.
+- Scheduler
+- n8n-Integration
+- Docker- oder VPS-Deployment
+- Kostenabrechnung und Tokenstatistik
+- Multi-Tenant-Unterstuetzung
+- Weitere AI-Provider

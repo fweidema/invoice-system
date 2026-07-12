@@ -12,6 +12,7 @@ public class ConfigurationLoader {
     private static final String PERSISTENCE_DATABASE_FILE = "persistence.databaseFile";
     private static final String OCR_LANGUAGE = "ocr.language";
     private static final String OCR_COMMAND = "ocr.command";
+    private static final String AI_PROVIDER = "ai.provider";
     private static final String AI_MODEL = "ai.model";
     private static final String AI_TEMPERATURE = "ai.temperature";
     private static final String BATCH_INPUT_DIRECTORY = "batch.inputDirectory";
@@ -50,6 +51,7 @@ public class ConfigurationLoader {
         properties.setProperty(PERSISTENCE_DATABASE_FILE, "data/invoice-system.db");
         properties.setProperty(OCR_LANGUAGE, "deu");
         properties.setProperty(OCR_COMMAND, "ocrmypdf");
+        properties.setProperty(AI_PROVIDER, AiConfiguration.PROVIDER_MOCK);
         properties.setProperty(AI_MODEL, "gpt-5");
         properties.setProperty(AI_TEMPERATURE, "0.0");
         properties.setProperty(BATCH_INPUT_DIRECTORY, "input");
@@ -70,13 +72,25 @@ public class ConfigurationLoader {
     }
 
     private AiConfiguration ai(final Properties properties) {
-        return new AiConfiguration(text(properties, AI_MODEL), Double.parseDouble(text(properties, AI_TEMPERATURE)));
+        return new AiConfiguration(
+                text(properties, AI_PROVIDER),
+                text(properties, AI_MODEL),
+                temperature(properties));
     }
 
     private BatchConfiguration batch(final Properties properties) {
         return new BatchConfiguration(
                 path(properties, BATCH_INPUT_DIRECTORY),
                 Boolean.parseBoolean(text(properties, BATCH_RECURSIVE)));
+    }
+
+    private double temperature(final Properties properties) {
+        final String value = text(properties, AI_TEMPERATURE);
+        try {
+            return Double.parseDouble(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Configuration property must be a valid number: " + AI_TEMPERATURE, exception);
+        }
     }
 
     private Path path(final Properties properties, final String key) {

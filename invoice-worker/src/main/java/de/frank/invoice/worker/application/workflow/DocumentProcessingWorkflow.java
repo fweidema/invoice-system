@@ -20,6 +20,8 @@ import de.frank.invoice.worker.application.validation.ValidationResult;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
 import de.frank.invoice.worker.domain.invoice.Invoice;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,6 +32,7 @@ import java.util.Objects;
  */
 public class DocumentProcessingWorkflow {
 
+    private static final Logger LOG = LoggerFactory.getLogger(DocumentProcessingWorkflow.class);
     private static final String PERSISTENCE_SUCCESS_MESSAGE = "Invoice persisted successfully.";
     private static final String PERSISTENCE_SKIPPED_MESSAGE = "Invoice was not persisted.";
 
@@ -102,6 +105,7 @@ public class DocumentProcessingWorkflow {
             addValidationMessages(messages, validationResult);
 
             if (!validationResult.valid()) {
+                LOG.warn("Invoice validation failed for document {}", document.originalFilename());
                 messages.add("Invoice validation failed. Persistence skipped.");
                 return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, null, messages, invoice);
             }
@@ -109,12 +113,14 @@ public class DocumentProcessingWorkflow {
             final DuplicateCheckResult duplicateCheckResult = duplicateDetector.check(ocrDocument, invoice);
             messages.add(duplicateCheckResult.message());
             if (duplicateCheckResult.duplicate()) {
+                LOG.warn("Duplicate invoice detected for document {}", document.originalFilename());
                 messages.add("Duplicate invoice detected. Persistence skipped.");
                 return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, duplicateCheckResult, null, messages, invoice);
             }
 
             return persistAndArchive(ocrDocument, invoice, duplicateCheckResult, messages);
         } catch (RuntimeException exception) {
+            LOG.error("Workflow failed for document {}", document.originalFilename(), exception);
             messages.add("Workflow failed: " + exception.getMessage());
             return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, null, messages, null);
         }
@@ -125,17 +131,17 @@ public class DocumentProcessingWorkflow {
             final Invoice invoice,
             final DuplicateCheckResult duplicateCheckResult,
             final List<String> messages) {
-        System.out.println("Persistenz gestartet");
+        LOG.debug("Persistence started for document {}", document.originalFilename());
         try {
             invoiceRepository.save(invoice);
         } catch (RuntimeException exception) {
-            System.out.println("Persistenz fehlgeschlagen");
+            LOG.error("Persistence failed for document {}", document.originalFilename(), exception);
             final String failureMessage = "Persistence failed: " + exception.getMessage();
             messages.add(failureMessage);
             return result(false, false, failureMessage, duplicateCheckResult, null, messages, invoice);
         }
 
-        System.out.println("Persistenz erfolgreich");
+        LOG.debug("Persistence succeeded for document {}", document.originalFilename());
         messages.add(PERSISTENCE_SUCCESS_MESSAGE);
         return archive(document, invoice, duplicateCheckResult, messages);
     }
@@ -147,9 +153,11 @@ public class DocumentProcessingWorkflow {
             final List<String> messages) {
         try {
             final ArchiveResult archiveResult = archiveService.archive(document, invoice);
+            LOG.info("Document archived: {}", document.originalFilename());
             messages.add(archiveResult.message());
             return result(true, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, archiveResult, messages, invoice);
         } catch (RuntimeException exception) {
+            LOG.error("Archiving failed for document {}", document.originalFilename(), exception);
             messages.add("Archive failed: " + exception.getMessage());
             return result(false, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, null, messages, invoice);
         }

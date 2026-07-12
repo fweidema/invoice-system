@@ -2,11 +2,13 @@ package de.frank.invoice.worker.cli;
 
 import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.batch.BatchProcessingResult;
+import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 
 import java.io.PrintStream;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
@@ -23,27 +25,29 @@ public class InvoiceWorkerCli {
     private static final String MOCK_TEXT_OPTION = "--mock-text";
     private static final int EXIT_SUCCESS = 0;
     private static final int EXIT_ERROR = 1;
+    private static final int MILLIS_PER_SECOND = 1_000;
 
     private final InvoiceWorker invoiceWorker;
-    private final Path defaultInputDirectory;
+    private final ApplicationConfiguration configuration;
     private final PrintStream out;
     private final PrintStream err;
+    private Path currentInputDirectory;
 
     /**
-     * Creates a CLI with explicit facade and default input directory.
+     * Creates a CLI with explicit facade and configuration.
      *
      * @param invoiceWorker invoice worker facade
-     * @param defaultInputDirectory default input directory
+     * @param configuration application configuration
      * @param out standard output stream
      * @param err error output stream
      */
     public InvoiceWorkerCli(
             final InvoiceWorker invoiceWorker,
-            final Path defaultInputDirectory,
+            final ApplicationConfiguration configuration,
             final PrintStream out,
             final PrintStream err) {
         this.invoiceWorker = Objects.requireNonNull(invoiceWorker, "invoiceWorker must not be null");
-        this.defaultInputDirectory = Objects.requireNonNull(defaultInputDirectory, "defaultInputDirectory must not be null");
+        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.out = Objects.requireNonNull(out, "out must not be null");
         this.err = Objects.requireNonNull(err, "err must not be null");
     }
@@ -66,13 +70,15 @@ public class InvoiceWorkerCli {
             return EXIT_ERROR;
         }
 
+        currentInputDirectory = inputDirectory;
+        printStartup(inputDirectory);
         final BatchProcessingResult result = invoiceWorker.processInputDirectory(inputDirectory);
         printResult(result);
         return EXIT_SUCCESS;
     }
 
     private Path resolveInputDirectory(final List<String> arguments) {
-        Path inputDirectory = defaultInputDirectory;
+        Path inputDirectory = configuration.batch().inputDirectory();
         int index = 1;
         while (index < arguments.size()) {
             final String argument = arguments.get(index);
@@ -111,12 +117,32 @@ public class InvoiceWorkerCli {
         return Arrays.asList(Objects.requireNonNull(args, "args must not be null")).contains(MOCK_TEXT_OPTION);
     }
 
+    private void printStartup(final Path inputDirectory) {
+        out.println("Invoice Worker gestartet");
+        out.println("Provider: " + configuration.ai().provider());
+        out.println("Modell: " + configuration.ai().model());
+        out.println("Input: " + inputDirectory);
+        out.println("Archiv: " + configuration.archive().archiveDirectory());
+        out.println("Datenbank: " + configuration.persistence().databaseFile());
+        out.println();
+    }
+
     private void printResult(final BatchProcessingResult result) {
-        out.println("Verarbeitung abgeschlossen.");
-        out.println("Dokumente gesamt: " + result.totalDocuments());
+        out.println();
+        out.println("Zusammenfassung");
+        out.println("Input: " + currentInputDirectory);
+        out.println("Gesamt: " + result.totalDocuments());
         out.println("Erfolgreich: " + result.successfulDocuments());
         out.println("Fehlgeschlagen: " + result.failedDocuments());
+        out.println("Dauer: " + formatDuration(result.processingTime()));
         printFailedResults(result);
+    }
+
+    private String formatDuration(final Duration duration) {
+        if (duration.toMillis() < MILLIS_PER_SECOND) {
+            return duration.toMillis() + " ms";
+        }
+        return String.format("%.2f s", duration.toMillis() / (double) MILLIS_PER_SECOND);
     }
 
     private void printFailedResults(final BatchProcessingResult result) {
@@ -157,3 +183,4 @@ public class InvoiceWorkerCli {
         err.println("Verwendung: process [--input <path>] [--skip-ocr] [--mock-text]");
     }
 }
+

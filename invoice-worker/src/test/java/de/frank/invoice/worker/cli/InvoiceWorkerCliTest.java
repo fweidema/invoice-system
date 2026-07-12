@@ -9,6 +9,12 @@ import de.frank.invoice.worker.application.duplicate.DuplicateCheckResult;
 import de.frank.invoice.worker.application.duplicate.DuplicateMatchType;
 import de.frank.invoice.worker.application.importer.DocumentImporter;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
+import de.frank.invoice.worker.application.configuration.AiConfiguration;
+import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
+import de.frank.invoice.worker.application.configuration.ArchiveConfiguration;
+import de.frank.invoice.worker.application.configuration.BatchConfiguration;
+import de.frank.invoice.worker.application.configuration.OcrConfiguration;
+import de.frank.invoice.worker.application.configuration.PersistenceConfiguration;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.invoice.Invoice;
@@ -148,12 +154,47 @@ class InvoiceWorkerCliTest {
 
         // Assert
         assertThat(exitCode).isZero();
-        assertThat(fixture.output()).contains("Verarbeitung abgeschlossen.");
-        assertThat(fixture.output()).contains("Dokumente gesamt: 3");
+        assertThat(fixture.output()).contains("Zusammenfassung");
+        assertThat(fixture.output()).contains("Gesamt: 3");
         assertThat(fixture.output()).contains("Erfolgreich: 2");
         assertThat(fixture.output()).contains("Fehlgeschlagen: 1");
     }
 
+    @Test
+    void processOutputContainsStartupConfiguration() {
+        // Arrange
+        final CliFixture fixture = fixture(result(1, 0));
+
+        // Act
+        final int exitCode = fixture.cli().run(new String[]{"process"});
+
+        // Assert
+        assertThat(exitCode).isZero();
+        assertThat(fixture.output()).contains("Invoice Worker gestartet");
+        assertThat(fixture.output()).contains("Provider: mock");
+        assertThat(fixture.output()).contains("Modell: gpt-5");
+        assertThat(fixture.output()).contains("Archiv: " + tempDirectory.resolve("archive"));
+        assertThat(fixture.output()).contains("Datenbank: " + tempDirectory.resolve("invoice-system.db"));
+    }
+
+    @Test
+    void consoleBatchProcessingListenerPrintsProgress() {
+        // Arrange
+        final ByteArrayOutputStream out = new ByteArrayOutputStream();
+        final ConsoleBatchProcessingListener listener = new ConsoleBatchProcessingListener(
+                new PrintStream(out, true, StandardCharsets.UTF_8));
+
+        // Act
+        listener.batchStarted(2);
+        listener.documentStarted(1, 2, "invoice-a.pdf");
+        listener.batchFinished(result(1, 1));
+
+        // Assert
+        final String output = out.toString(StandardCharsets.UTF_8);
+        assertThat(output).contains("Dokumente gefunden: 2");
+        assertThat(output).contains("[1/2] invoice-a.pdf");
+        assertThat(output).contains("Batch beendet.");
+    }
     @Test
     void processOutputContainsFailedDocumentDetailsAndMessages() {
         // Arrange
@@ -186,10 +227,19 @@ class InvoiceWorkerCliTest {
         final ByteArrayOutputStream err = new ByteArrayOutputStream();
         final InvoiceWorkerCli cli = new InvoiceWorkerCli(
                 invoiceWorker,
-                tempDirectory.resolve("configured-input"),
+                configuration(),
                 new PrintStream(out, true, StandardCharsets.UTF_8),
                 new PrintStream(err, true, StandardCharsets.UTF_8));
         return new CliFixture(cli, invoiceWorker, out, err);
+    }
+
+    private ApplicationConfiguration configuration() {
+        return new ApplicationConfiguration(
+                new ArchiveConfiguration(tempDirectory.resolve("archive")),
+                new PersistenceConfiguration(tempDirectory.resolve("invoice-system.db")),
+                new OcrConfiguration("deu", "ocrmypdf"),
+                new AiConfiguration("mock", "gpt-5", 0.0),
+                new BatchConfiguration(tempDirectory.resolve("configured-input"), false));
     }
 
     private BatchProcessingResult result(final int successful, final int failed) {
@@ -302,3 +352,6 @@ class InvoiceWorkerCliTest {
         }
     }
 }
+
+
+

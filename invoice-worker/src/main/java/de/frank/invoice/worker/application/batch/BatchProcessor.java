@@ -3,6 +3,8 @@ package de.frank.invoice.worker.application.batch;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingWorkflow;
 import de.frank.invoice.worker.domain.document.Document;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.time.Clock;
 import java.time.Duration;
@@ -16,10 +18,12 @@ import java.util.Objects;
  */
 public class BatchProcessor {
 
+    private static final Logger LOG = LoggerFactory.getLogger(BatchProcessor.class);
     private static final String PERSISTENCE_SKIPPED_MESSAGE = "Invoice was not persisted.";
 
     private final DocumentProcessingWorkflow workflow;
     private final Clock clock;
+    private final BatchProcessingListener listener;
 
     /**
      * Creates a batch processor using the system clock.
@@ -27,7 +31,7 @@ public class BatchProcessor {
      * @param workflow document processing workflow
      */
     public BatchProcessor(final DocumentProcessingWorkflow workflow) {
-        this(workflow, Clock.systemUTC());
+        this(workflow, Clock.systemUTC(), BatchProcessingListener.NO_OP);
     }
 
     /**
@@ -37,8 +41,33 @@ public class BatchProcessor {
      * @param clock clock used to measure processing time
      */
     public BatchProcessor(final DocumentProcessingWorkflow workflow, final Clock clock) {
+        this(workflow, clock, BatchProcessingListener.NO_OP);
+    }
+
+    /**
+     * Creates a batch processor with explicit progress listener.
+     *
+     * @param workflow document processing workflow
+     * @param listener progress listener
+     */
+    public BatchProcessor(final DocumentProcessingWorkflow workflow, final BatchProcessingListener listener) {
+        this(workflow, Clock.systemUTC(), listener);
+    }
+
+    /**
+     * Creates a batch processor with an explicit clock and progress listener.
+     *
+     * @param workflow document processing workflow
+     * @param clock clock used to measure processing time
+     * @param listener progress listener
+     */
+    public BatchProcessor(
+            final DocumentProcessingWorkflow workflow,
+            final Clock clock,
+            final BatchProcessingListener listener) {
         this.workflow = Objects.requireNonNull(workflow, "workflow must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.listener = Objects.requireNonNull(listener, "listener must not be null");
     }
 
     /**
@@ -51,30 +80,43 @@ public class BatchProcessor {
         Objects.requireNonNull(documents, "documents must not be null");
 
         final Instant startedAt = Instant.now(clock);
-        System.out.println("Batch gestartet");
-        System.out.println("Anzahl Dokumente: " + documents.size());
+        LOG.info("Batch started with {} document(s)", documents.size());
+        listener.batchStarted(documents.size());
 
         final List<DocumentProcessingResult> results = new ArrayList<>();
-        for (final Document document : documents) {
-            results.add(processDocument(document));
+        for (int index = 0; index < documents.size(); index++) {
+            final Document document = documents.get(index);
+            results.add(processDocument(document, index + 1, documents.size()));
         }
 
         final Duration processingTime = Duration.between(startedAt, Instant.now(clock));
         final BatchProcessingResult result = new BatchProcessingResult(0, 0, 0, results, processingTime);
-        System.out.println("Batch beendet");
-        System.out.println("Anzahl erfolgreich: " + result.successfulDocuments());
-        System.out.println("Anzahl fehlgeschlagen: " + result.failedDocuments());
+        LOG.info(
+                "Batch finished: total={}, successful={}, failed={}, durationMs={}",
+                result.totalDocuments(),
+                result.successfulDocuments(),
+                result.failedDocuments(),
+                result.processingTime().toMillis());
+        listener.batchFinished(result);
         return result;
     }
 
-    private DocumentProcessingResult processDocument(final Document document) {
-        System.out.println("Dokument gestartet: " + document.originalFilename());
+    private DocumentProcessingResult processDocument(
+            final Document document,
+            final int currentDocument,
+            final int totalDocuments) {
+        LOG.info("Document started: {}", document.originalFilename());
+        listener.documentStarted(currentDocument, totalDocuments, document.originalFilename());
         try {
             final DocumentProcessingResult result = workflow.process(document);
-            System.out.println("Dokument beendet: " + document.originalFilename());
+            if (result.successful()) {
+                LOG.info("Document processed successfully: {}", document.originalFilename());
+            } else {
+                LOG.warn("Document processing finished with failure: {}", document.originalFilename());
+            }
             return result;
         } catch (RuntimeException exception) {
-            System.out.println("Dokument beendet: " + document.originalFilename());
+            LOG.error("Document processing failed: {}", document.originalFilename(), exception);
             return failedResult(exception);
         }
     }
