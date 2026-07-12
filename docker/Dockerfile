@@ -4,6 +4,8 @@ WORKDIR /workspace
 
 COPY .mvn .mvn
 COPY mvnw mvnw
+RUN chmod +x mvnw
+
 COPY pom.xml pom.xml
 COPY invoice-worker/pom.xml invoice-worker/pom.xml
 
