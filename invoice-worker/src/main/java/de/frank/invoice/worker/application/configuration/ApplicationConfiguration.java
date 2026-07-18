@@ -1,5 +1,7 @@
 package de.frank.invoice.worker.application.configuration;
 
+import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Objects;
 
 /**
@@ -10,6 +12,7 @@ import java.util.Objects;
  * @param ocr OCR configuration
  * @param ai AI configuration
  * @param batch batch processing configuration
+ * @param watch watch service configuration
  * @param logging logging configuration
  */
 public record ApplicationConfiguration(
@@ -18,6 +21,7 @@ public record ApplicationConfiguration(
         OcrConfiguration ocr,
         AiConfiguration ai,
         BatchConfiguration batch,
+        WatchConfiguration watch,
         LoggingConfiguration logging) {
 
     /**
@@ -35,7 +39,7 @@ public record ApplicationConfiguration(
             final OcrConfiguration ocr,
             final AiConfiguration ai,
             final BatchConfiguration batch) {
-        this(archive, persistence, ocr, ai, batch, new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL));
+        this(archive, persistence, ocr, ai, batch, defaultWatchConfiguration(), new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL));
     }
 
     /**
@@ -47,6 +51,17 @@ public record ApplicationConfiguration(
         Objects.requireNonNull(ocr, "ocr must not be null");
         Objects.requireNonNull(ai, "ai must not be null");
         Objects.requireNonNull(batch, "batch must not be null");
+        Objects.requireNonNull(watch, "watch must not be null");
         Objects.requireNonNull(logging, "logging must not be null");
+    }
+
+    private static WatchConfiguration defaultWatchConfiguration() {
+        return new WatchConfiguration(
+                Path.of("input"),
+                Duration.ofSeconds(2),
+                Duration.ofSeconds(3),
+                Duration.ofMinutes(5),
+                Duration.ofSeconds(10),
+                true);
     }
 }

@@ -64,6 +64,7 @@ Grundform:
 
 ```bash
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process [--input <path>] [--config <path>] [--profile <default|test|production>] [--skip-ocr] [--mock-text]
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar watch [--input <path>] [--config <path>] [--profile <default|test|production>] [--skip-ocr] [--mock-text]
 ```
 
 Beispiele:
@@ -72,6 +73,7 @@ Beispiele:
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile test
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile production --config config/application.properties
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar watch --profile production --config config/application.properties
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input --skip-ocr
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input --skip-ocr --mock-text
 ```
@@ -112,7 +114,7 @@ Unter PowerShell:
 $env:OPENAI_API_KEY = "..."
 ```
 
-Die vollstaendige Konfigurationsreferenz steht in [docs/configuration.md](docs/configuration.md). Weitere OpenAI-Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md). Der kontrollierte Ein-Dokument-Test fuer echten OpenAI-Betrieb ist in [docs/openai-end-to-end-test.md](docs/openai-end-to-end-test.md) beschrieben.
+Die vollstaendige Konfigurationsreferenz steht in [docs/configuration.md](docs/configuration.md). Der dauerhafte Watch-Betrieb ist in [docs/watch-service.md](docs/watch-service.md) beschrieben. Weitere OpenAI-Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md). Der kontrollierte Ein-Dokument-Test fuer echten OpenAI-Betrieb ist in [docs/openai-end-to-end-test.md](docs/openai-end-to-end-test.md) beschrieben.
 
 ## Projektstruktur
 
@@ -144,6 +146,8 @@ Der Worker kann als einzelner Docker-Container mit persistenter Runtime-Struktur
 docker compose build
 ./scripts/container-self-check.sh
 docker compose run --rm invoice-worker
+# dauerhaft, optionales Compose-Profil
+docker compose --profile watch up -d invoice-worker-watch
 ```
 
 Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.

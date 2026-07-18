@@ -10,6 +10,7 @@ import java.util.Optional;
  * Parsed command line options for invoice processing.
  */
 public record CliOptions(
+        CliCommand command,
         Path inputDirectory,
         Path configFile,
         OperatingProfile profile,
@@ -18,7 +19,6 @@ public record CliOptions(
         boolean explicitSkipOcr,
         boolean explicitMockText) {
 
-    private static final String PROCESS_COMMAND = "process";
     private static final String INPUT_OPTION = "--input";
     private static final String CONFIG_OPTION = "--config";
     private static final String PROFILE_OPTION = "--profile";
@@ -33,9 +33,10 @@ public record CliOptions(
      */
     public static CliOptions parse(final String[] args) {
         final List<String> arguments = Arrays.asList(Objects.requireNonNull(args, "args must not be null"));
-        if (arguments.isEmpty() || !PROCESS_COMMAND.equals(arguments.getFirst())) {
+        if (arguments.isEmpty()) {
             throw new IllegalArgumentException("Unknown command.");
         }
+        final CliCommand command = CliCommand.parse(arguments.getFirst());
         Path inputDirectory = null;
         Path configFile = null;
         OperatingProfile profile = OperatingProfile.DEFAULT;
@@ -78,7 +79,7 @@ public record CliOptions(
         if (profile == OperatingProfile.PRODUCTION && configFile == null) {
             throw new IllegalArgumentException("Profile production requires an external --config file.");
         }
-        return new CliOptions(inputDirectory, configFile, profile, skipOcr, mockText, explicitSkipOcr, explicitMockText);
+        return new CliOptions(command, inputDirectory, configFile, profile, skipOcr, mockText, explicitSkipOcr, explicitMockText);
     }
 
     /**

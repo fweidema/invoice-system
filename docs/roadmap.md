@@ -29,10 +29,11 @@ Diese Roadmap beschreibt den aktuellen Stand und die naechsten sinnvollen Entwic
 - [x] Sprint 024: External Configuration and Operating Profiles
 - [x] Sprint 025: Docker- und VPS-Deployment
 - [x] Sprint 027: OpenAI-End-to-End-Testdokumentation und Testprotokoll-Vorlage
+- [x] Sprint 028: Automatische Dokumentenverarbeitung per Watch-Service
 
 ## Aktueller Stand
 
-`invoice-worker` kann lokal PDF-Dokumente importieren, optional OCR ausfuehren, Rechnungsdaten ueber Mock-AI oder OpenAI analysieren, Ergebnisse validieren, Dubletten erkennen, in SQLite persistieren und Dokumente im Dateisystem archivieren. Der echte OpenAI-Betrieb ist als kontrollierter Ein-Dokument-Lauf mit Fake- oder anonymisierten Dokumenten dokumentiert.
+`invoice-worker` kann lokal PDF-Dokumente importieren, optional OCR ausfuehren, Rechnungsdaten ueber Mock-AI oder OpenAI analysieren, Ergebnisse validieren, Dubletten erkennen, in SQLite persistieren und Dokumente im Dateisystem archivieren. Zusaetzlich kann der Watch-Service ein Eingangsverzeichnis dauerhaft sequenziell verarbeiten. Der echte OpenAI-Betrieb ist als kontrollierter Ein-Dokument-Lauf mit Fake- oder anonymisierten Dokumenten dokumentiert.
 
 ## Naechste Schritte
 

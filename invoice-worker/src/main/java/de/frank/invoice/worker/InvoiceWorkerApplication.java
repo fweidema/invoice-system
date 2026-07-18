@@ -4,14 +4,21 @@ import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.InvoiceWorkerFactory;
 import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
 import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
+import de.frank.invoice.worker.application.configuration.WatchConfiguration;
+import de.frank.invoice.worker.application.watch.FileReadyDetector;
+import de.frank.invoice.worker.application.watch.Sleeper;
+import de.frank.invoice.worker.application.watch.WatchServiceRunner;
+import de.frank.invoice.worker.cli.CliCommand;
 import de.frank.invoice.worker.cli.CliHelpPrinter;
 import de.frank.invoice.worker.cli.CliOptions;
 import de.frank.invoice.worker.cli.ConsoleBatchProcessingListener;
 import de.frank.invoice.worker.cli.InvoiceWorkerCli;
+import de.frank.invoice.worker.infrastructure.watch.NioDirectoryWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.PrintStream;
+import java.time.Clock;
 import java.util.Properties;
 
 /**
@@ -78,13 +85,35 @@ public class InvoiceWorkerApplication {
                 options.skipOcr(),
                 options.mockText(),
                 listener);
+        final WatchServiceRunner watchServiceRunner = options.command() == CliCommand.WATCH
+                ? watchServiceRunner(configuration, options, invoiceWorker)
+                : null;
+        if (watchServiceRunner != null) {
+            Runtime.getRuntime().addShutdownHook(new Thread(watchServiceRunner::requestShutdown, "invoice-watch-shutdown"));
+        }
         return new InvoiceWorkerCli(
                 invoiceWorker,
                 configuration,
                 out,
                 err,
-                options)
+                options,
+                watchServiceRunner)
                 .run(args);
+    }
+
+    private static WatchServiceRunner watchServiceRunner(
+            final ApplicationConfiguration configuration,
+            final CliOptions options,
+            final InvoiceWorker invoiceWorker) {
+        final WatchConfiguration watchConfiguration = options.inputDirectory() == null
+                ? configuration.watch()
+                : configuration.watch().withDirectory(options.inputDirectory());
+        return new WatchServiceRunner(
+                invoiceWorker,
+                watchConfiguration,
+                new FileReadyDetector(watchConfiguration, Clock.systemUTC(), Sleeper.system()),
+                new NioDirectoryWatcher(watchConfiguration.directory()),
+                Clock.systemUTC());
     }
 
     private static void configureLogging(final String level) {

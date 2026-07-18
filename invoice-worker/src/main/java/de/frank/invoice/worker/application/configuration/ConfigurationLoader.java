@@ -23,6 +23,12 @@ public class ConfigurationLoader {
     public static final String AI_TEMPERATURE = "ai.temperature";
     public static final String BATCH_INPUT_DIRECTORY = "batch.inputDirectory";
     public static final String BATCH_RECURSIVE = "batch.recursive";
+    public static final String WATCH_DIRECTORY = "watch.directory";
+    public static final String WATCH_POLL_INTERVAL = "watch.pollInterval";
+    public static final String WATCH_STABLE_TIME = "watch.stableTime";
+    public static final String WATCH_MAX_WAIT_TIME = "watch.maxWaitTime";
+    public static final String WATCH_SHUTDOWN_TIMEOUT = "watch.shutdownTimeout";
+    public static final String WATCH_PROCESS_EXISTING = "watch.processExistingFilesOnStartup";
     public static final String LOGGING_LEVEL = "logging.level";
 
     private static final Map<String, String> ENVIRONMENT_MAPPING = Map.ofEntries(
@@ -32,6 +38,12 @@ public class ConfigurationLoader {
             Map.entry("INVOICE_ARCHIVE_DIRECTORY", ARCHIVE_DIRECTORY),
             Map.entry("INVOICE_DATABASE_FILE", PERSISTENCE_DATABASE_FILE),
             Map.entry("INVOICE_INPUT_DIRECTORY", BATCH_INPUT_DIRECTORY),
+            Map.entry("INVOICE_WATCH_DIRECTORY", WATCH_DIRECTORY),
+            Map.entry("INVOICE_WATCH_POLL_INTERVAL", WATCH_POLL_INTERVAL),
+            Map.entry("INVOICE_WATCH_STABLE_TIME", WATCH_STABLE_TIME),
+            Map.entry("INVOICE_WATCH_MAX_WAIT_TIME", WATCH_MAX_WAIT_TIME),
+            Map.entry("INVOICE_WATCH_SHUTDOWN_TIMEOUT", WATCH_SHUTDOWN_TIMEOUT),
+            Map.entry("INVOICE_WATCH_PROCESS_EXISTING", WATCH_PROCESS_EXISTING),
             Map.entry("INVOICE_OCR_COMMAND", OCR_COMMAND),
             Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
             Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
@@ -134,6 +146,12 @@ public class ConfigurationLoader {
         properties.setProperty(AI_TEMPERATURE, "0.0");
         properties.setProperty(BATCH_INPUT_DIRECTORY, "input");
         properties.setProperty(BATCH_RECURSIVE, "false");
+        properties.setProperty(WATCH_DIRECTORY, "input");
+        properties.setProperty(WATCH_POLL_INTERVAL, "2s");
+        properties.setProperty(WATCH_STABLE_TIME, "3s");
+        properties.setProperty(WATCH_MAX_WAIT_TIME, "5m");
+        properties.setProperty(WATCH_SHUTDOWN_TIMEOUT, "10s");
+        properties.setProperty(WATCH_PROCESS_EXISTING, "true");
         properties.setProperty(LOGGING_LEVEL, LoggingConfiguration.DEFAULT_LEVEL);
         return properties;
     }
@@ -145,6 +163,7 @@ public class ConfigurationLoader {
                 ocr(properties),
                 ai(properties),
                 batch(properties),
+                watch(properties),
                 logging(properties));
     }
 
@@ -183,6 +202,17 @@ public class ConfigurationLoader {
         return new BatchConfiguration(
                 path(properties, BATCH_INPUT_DIRECTORY),
                 bool(properties, BATCH_RECURSIVE));
+    }
+
+    private WatchConfiguration watch(final Properties properties) {
+        final DurationParser durationParser = new DurationParser();
+        return new WatchConfiguration(
+                path(properties, WATCH_DIRECTORY),
+                durationParser.parse(text(properties, WATCH_POLL_INTERVAL), WATCH_POLL_INTERVAL),
+                durationParser.parse(text(properties, WATCH_STABLE_TIME), WATCH_STABLE_TIME),
+                durationParser.parse(text(properties, WATCH_MAX_WAIT_TIME), WATCH_MAX_WAIT_TIME),
+                durationParser.parse(text(properties, WATCH_SHUTDOWN_TIMEOUT), WATCH_SHUTDOWN_TIMEOUT),
+                bool(properties, WATCH_PROCESS_EXISTING));
     }
 
     private LoggingConfiguration logging(final Properties properties) {

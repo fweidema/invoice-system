@@ -1,6 +1,7 @@
 package de.frank.invoice.worker.application.batch;
 
 import de.frank.invoice.worker.application.importer.DocumentImporter;
+import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
 import de.frank.invoice.worker.domain.document.Document;
 
 import java.nio.file.Path;
@@ -38,5 +39,18 @@ public class BatchProcessingApplicationService {
         Objects.requireNonNull(inputDirectory, "inputDirectory must not be null");
         final List<Document> documents = documentImporter.importDocuments(inputDirectory);
         return batchProcessor.process(documents);
+    }
+
+    /**
+     * Imports and processes exactly one document through the normal batch processor.
+     *
+     * @param documentFile document file
+     * @return document processing result
+     */
+    public DocumentProcessingResult processDocument(final Path documentFile) {
+        Objects.requireNonNull(documentFile, "documentFile must not be null");
+        final Document document = documentImporter.importDocument(documentFile)
+                .orElseThrow(() -> new IllegalArgumentException("Document is not a supported PDF file: " + documentFile));
+        return batchProcessor.process(List.of(document)).results().getFirst();
     }
 }

@@ -1,8 +1,8 @@
 package de.frank.invoice.worker.application.importer;
 
+import de.frank.invoice.worker.application.hash.DocumentHashService;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
-import de.frank.invoice.worker.application.hash.DocumentHashService;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -14,6 +14,7 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -70,6 +71,20 @@ public class DocumentImporter {
         }
     }
 
+    /**
+     * Imports one regular PDF file.
+     *
+     * @param documentFile document file
+     * @return imported document if the path is a regular PDF file
+     */
+    public Optional<Document> importDocument(final Path documentFile) {
+        Objects.requireNonNull(documentFile, "documentFile must not be null");
+        if (!Files.isRegularFile(documentFile) || !isPdfFile(documentFile)) {
+            return Optional.empty();
+        }
+        return Optional.of(createDocument(documentFile));
+    }
+
     private boolean isPdfFile(final Path file) {
         final Path filename = file.getFileName();
         return filename != null && filename.toString().toLowerCase(Locale.ROOT).endsWith(PDF_EXTENSION);
@@ -90,4 +105,3 @@ public class DocumentImporter {
                 importedAt);
     }
 }
-

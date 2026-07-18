@@ -24,6 +24,9 @@ Alle nennenswerten Aenderungen an diesem Projekt werden in dieser Datei dokument
 - Dokumentation fuer OpenAI-Konfiguration und Architekturuebersicht.
 - Dokumentation fuer den kontrollierten OpenAI-End-to-End-Test mit genau einem Fake- oder anonymisierten Dokument.
 - Testprotokoll-Vorlage fuer OpenAI-End-to-End-Laeufe ohne Secrets und ohne private Daten.
+- Watch-Service fuer automatische, sequenzielle PDF-Verarbeitung per Java NIO WatchService.
+- Konfigurierbare Watch-Dateistabilitaet und Environment-Overrides.
+- Docker-Compose-Service `invoice-worker-watch` fuer dauerhaften Betrieb ohne Ports.
 
 ### Changed
 

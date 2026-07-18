@@ -2,12 +2,13 @@ package de.frank.invoice.worker.application;
 
 import de.frank.invoice.worker.application.batch.BatchProcessingApplicationService;
 import de.frank.invoice.worker.application.batch.BatchProcessingResult;
+import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
 
 import java.nio.file.Path;
 import java.util.Objects;
 
 /**
- * Facade for processing invoice input directories.
+ * Facade for processing invoice input directories and documents.
  */
 public class InvoiceWorker {
 
@@ -33,5 +34,16 @@ public class InvoiceWorker {
     public BatchProcessingResult processInputDirectory(final Path inputDirectory) {
         Objects.requireNonNull(inputDirectory, "inputDirectory must not be null");
         return batchProcessingApplicationService.processInputDirectory(inputDirectory);
+    }
+
+    /**
+     * Processes one supported document file through the existing processing workflow.
+     *
+     * @param document document file
+     * @return document processing result
+     */
+    public DocumentProcessingResult processDocument(final Path document) {
+        Objects.requireNonNull(document, "document must not be null");
+        return batchProcessingApplicationService.processDocument(document);
     }
 }

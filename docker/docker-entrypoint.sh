@@ -6,7 +6,7 @@ if [ "$#" -eq 0 ]; then
 fi
 
 case "$1" in
-  process|help)
+  process|watch|help)
     exec java -jar /app/invoice-worker.jar "$@"
     ;;
   *)

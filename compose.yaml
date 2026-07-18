@@ -18,3 +18,32 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+
+  invoice-worker-watch:
+    profiles:
+      - watch
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command:
+      - watch
+      - --profile
+      - production
+      - --config
+      - /config/application.properties
+    restart: unless-stopped
+    stop_grace_period: 15s
+    mem_limit: 4g
+    environment:
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+    volumes:
+      - ./runtime/input:/data/input
+      - ./runtime/ocr:/data/ocr
+      - ./runtime/archive:/data/archive
+      - ./runtime/database:/data/database
+      - ./runtime/logs:/data/logs
+      - ./docker/application.properties:/config/application.properties:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

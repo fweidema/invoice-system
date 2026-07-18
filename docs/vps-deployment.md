@@ -65,6 +65,23 @@ runtime/ocr/
 runtime/archive/
 ```
 
+
+## Watch-Betrieb
+
+Der manuelle Batch-Service bleibt erhalten. Fuer dauerhafte automatische Verarbeitung kann der separate Watch-Service gestartet werden:
+
+```bash
+docker compose --profile watch up -d invoice-worker-watch
+docker compose logs -f invoice-worker-watch
+```
+
+Neue PDFs werden aus `runtime/input` erkannt, auf Stabilitaet geprueft und sequenziell ueber denselben Workflow verarbeitet. Stoppen:
+
+```bash
+docker compose stop invoice-worker-watch
+```
+
+Es werden keine Ports veroeffentlicht, kein Docker-Socket gemountet und keine Secrets in Properties-Dateien gespeichert. Details stehen in [watch-service.md](watch-service.md).
 ## Produktiver OpenAI-Betrieb
 
 Erst nach erfolgreichem Mock-Test `docker/application.properties` auf `ai.provider=openai` umstellen und den API-Key ausschliesslich als Environment-Variable setzen:

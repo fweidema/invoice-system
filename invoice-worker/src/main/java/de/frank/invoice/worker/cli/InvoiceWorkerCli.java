@@ -3,6 +3,7 @@ package de.frank.invoice.worker.cli;
 import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.batch.BatchProcessingResult;
 import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
+import de.frank.invoice.worker.application.watch.WatchServiceRunner;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 
@@ -28,6 +29,7 @@ public class InvoiceWorkerCli {
     private final PrintStream out;
     private final PrintStream err;
     private final CliOptions options;
+    private final WatchServiceRunner watchServiceRunner;
     private Path currentInputDirectory;
 
     /**
@@ -43,7 +45,7 @@ public class InvoiceWorkerCli {
             final ApplicationConfiguration configuration,
             final PrintStream out,
             final PrintStream err) {
-        this(invoiceWorker, configuration, out, err, null);
+        this(invoiceWorker, configuration, out, err, null, null);
     }
 
     /**
@@ -61,11 +63,32 @@ public class InvoiceWorkerCli {
             final PrintStream out,
             final PrintStream err,
             final CliOptions options) {
+        this(invoiceWorker, configuration, out, err, options, null);
+    }
+
+    /**
+     * Creates a CLI with explicit facade, configuration, parsed options and watch runner.
+     *
+     * @param invoiceWorker invoice worker facade
+     * @param configuration application configuration
+     * @param out standard output stream
+     * @param err error output stream
+     * @param options parsed CLI options
+     * @param watchServiceRunner watch runner for the watch command
+     */
+    public InvoiceWorkerCli(
+            final InvoiceWorker invoiceWorker,
+            final ApplicationConfiguration configuration,
+            final PrintStream out,
+            final PrintStream err,
+            final CliOptions options,
+            final WatchServiceRunner watchServiceRunner) {
         this.invoiceWorker = Objects.requireNonNull(invoiceWorker, "invoiceWorker must not be null");
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.out = Objects.requireNonNull(out, "out must not be null");
         this.err = Objects.requireNonNull(err, "err must not be null");
         this.options = options;
+        this.watchServiceRunner = watchServiceRunner;
     }
 
     /**
@@ -87,24 +110,10 @@ public class InvoiceWorkerCli {
             err.println("Configuration file does not exist: " + parsedOptions.configFile());
             return EXIT_ERROR;
         }
-        final Path inputDirectory = parsedOptions.inputDirectory() == null
-                ? configuration.batch().inputDirectory()
-                : parsedOptions.inputDirectory();
-
-        currentInputDirectory = inputDirectory;
-        printStartup(inputDirectory, parsedOptions);
-        final BatchProcessingResult result;
-        try {
-            result = invoiceWorker.processInputDirectory(inputDirectory);
-        } catch (RuntimeException exception) {
-            err.println("Verarbeitung konnte nicht gestartet werden: " + exception.getMessage());
-            return EXIT_ERROR;
-        }
-        printResult(result);
-        if (result.failedDocuments() > 0) {
-            return EXIT_BATCH_FAILED;
-        }
-        return EXIT_SUCCESS;
+        return switch (parsedOptions.command()) {
+            case PROCESS -> runProcess(parsedOptions);
+            case WATCH -> runWatch(parsedOptions);
+        };
     }
 
     /**
@@ -125,6 +134,47 @@ public class InvoiceWorkerCli {
      */
     public static boolean mockTextRequested(final String[] args) {
         return CliOptions.mockTextRequested(args);
+    }
+
+    private int runProcess(final CliOptions parsedOptions) {
+        final Path inputDirectory = parsedOptions.inputDirectory() == null
+                ? configuration.batch().inputDirectory()
+                : parsedOptions.inputDirectory();
+
+        currentInputDirectory = inputDirectory;
+        printStartup(inputDirectory, parsedOptions);
+        final BatchProcessingResult result;
+        try {
+            result = invoiceWorker.processInputDirectory(inputDirectory);
+        } catch (RuntimeException exception) {
+            err.println("Verarbeitung konnte nicht gestartet werden: " + exception.getMessage());
+            return EXIT_ERROR;
+        }
+        printResult(result);
+        if (result.failedDocuments() > 0) {
+            return EXIT_BATCH_FAILED;
+        }
+        return EXIT_SUCCESS;
+    }
+
+    private int runWatch(final CliOptions parsedOptions) {
+        if (watchServiceRunner == null) {
+            err.println("Watch service is not configured.");
+            return EXIT_ERROR;
+        }
+        final Path watchDirectory = parsedOptions.inputDirectory() == null
+                ? configuration.watch().directory()
+                : parsedOptions.inputDirectory();
+        out.println("Invoice Worker Watch gestartet");
+        out.println("Profil: " + parsedOptions.profile().profileName());
+        out.println("Konfigurationsdatei: " + parsedOptions.optionalConfigFile().map(Path::toString).orElse("<intern>"));
+        out.println("Provider: " + configuration.ai().provider());
+        out.println("Modell: " + configuration.ai().model());
+        out.println("Watch-Input: " + watchDirectory);
+        out.println("Archiv: " + configuration.archive().archiveDirectory());
+        out.println("Datenbank: " + configuration.persistence().databaseFile());
+        out.println();
+        return watchServiceRunner.run();
     }
 
     private void printStartup(final Path inputDirectory, final CliOptions parsedOptions) {

@@ -102,3 +102,7 @@ Der Workflow arbeitet ausschliesslich mit `AiClient`. OpenAI-spezifischer HTTP-,
 - API-Keys werden nicht in Konfiguration, Logs oder Testressourcen gespeichert.
 - OCR-Texte, OpenAI-Antworten und Rechnungsdaten werden nicht vollstaendig geloggt.
 - Persistenz und Archivierung sind Infrastrukturadapter hinter Application-Ports.
+
+## Watch-Service
+
+Der Watch-Service liegt in pplication.watch und infrastructure.watch. Er nutzt Java NIO WatchService, prueft Dateistabilitaet und delegiert einzelne Dokumente an InvoiceWorker.processDocument(Path). Die Workflow-Fachlogik bleibt im bestehenden DocumentProcessingWorkflow. Details stehen in [watch-service.md](watch-service.md).
