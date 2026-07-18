@@ -26,6 +26,7 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
     private static final String PDF_EXTENSION = ".pdf";
 
     private final Path directory;
+    private final Runnable readyListener;
     private WatchService watchService;
 
     /**
@@ -34,7 +35,18 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
      * @param directory directory to watch
      */
     public NioDirectoryWatcher(final Path directory) {
+        this(directory, () -> { });
+    }
+
+    /**
+     * Creates a NIO directory watcher with a lifecycle hook for tests and embedding code.
+     *
+     * @param directory directory to watch
+     * @param readyListener listener invoked after successful directory registration
+     */
+    public NioDirectoryWatcher(final Path directory, final Runnable readyListener) {
         this.directory = Objects.requireNonNull(directory, "directory must not be null");
+        this.readyListener = Objects.requireNonNull(readyListener, "readyListener must not be null");
     }
 
     @Override
@@ -49,6 +61,7 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
                     service,
                     StandardWatchEventKinds.ENTRY_CREATE,
                     StandardWatchEventKinds.ENTRY_MODIFY);
+            readyListener.run();
             while (!Thread.currentThread().isInterrupted()) {
                 final WatchKey key = service.take();
                 for (final WatchEvent<?> event : key.pollEvents()) {
