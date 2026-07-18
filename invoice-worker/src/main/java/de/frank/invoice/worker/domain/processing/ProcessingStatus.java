@@ -1,7 +1,7 @@
 package de.frank.invoice.worker.domain.processing;
 
 /**
- * Describes the current processing state of an imported document.
+ * Describes a final document processing outcome or a legacy processing state.
  */
 public enum ProcessingStatus {
 
@@ -38,6 +38,45 @@ public enum ProcessingStatus {
     /**
      * Processing failed.
      */
-    FAILED
-}
+    FAILED,
 
+    /**
+     * The document was processed, persisted and archived successfully.
+     */
+    SUCCESS,
+
+    /**
+     * The document was skipped because a duplicate was detected.
+     */
+    DUPLICATE,
+
+    /**
+     * The document was skipped because validation failed.
+     */
+    VALIDATION_FAILED,
+
+    /**
+     * OCR failed before text extraction could continue.
+     */
+    OCR_FAILED,
+
+    /**
+     * AI request creation, execution or response mapping failed.
+     */
+    AI_FAILED,
+
+    /**
+     * Invoice persistence failed.
+     */
+    PERSISTENCE_FAILED,
+
+    /**
+     * Archiving failed after invoice persistence.
+     */
+    ARCHIVE_FAILED,
+
+    /**
+     * Processing failed for an unexpected technical reason.
+     */
+    ERROR
+}

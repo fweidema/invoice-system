@@ -14,16 +14,19 @@ import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
 import de.frank.invoice.worker.domain.invoice.Invoice;
+import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import de.frank.invoice.worker.infrastructure.ai.mock.MockAiClient;
 import de.frank.invoice.worker.infrastructure.archive.FileSystemArchiveService;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Clock;
 import java.time.Instant;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -34,9 +37,11 @@ class DocumentProcessingWorkflowPersistenceIntegrationTest {
     private Path tempDirectory;
 
     @Test
-    void workflowPersistsAndArchivesNonDuplicateInvoice() throws IOException {
+    void workflowPersistsArchivesAndWritesProcessingHistoryForNonDuplicateInvoice() throws IOException {
         // Arrange
-        final InvoiceRepository repository = new SQLiteInvoiceRepository(tempDirectory.resolve("invoice-system.db"));
+        final Path databaseFile = tempDirectory.resolve("invoice-system.db");
+        final InvoiceRepository repository = new SQLiteInvoiceRepository(databaseFile);
+        final SQLiteProcessingHistoryRepository historyRepository = new SQLiteProcessingHistoryRepository(databaseFile);
         final Path sourceFile = tempDirectory.resolve("invoice.pdf");
         Files.writeString(sourceFile, "invoice content");
         final Path archiveDirectory = tempDirectory.resolve("archive");
@@ -50,7 +55,9 @@ class DocumentProcessingWorkflowPersistenceIntegrationTest {
                 new InvoiceValidator(),
                 new DuplicateDetector(repository),
                 repository,
-                new FileSystemArchiveService(archiveDirectory));
+                new FileSystemArchiveService(archiveDirectory),
+                historyRepository,
+                Clock.systemUTC());
 
         // Act
         final DocumentProcessingResult result = workflow.process(document(sourceFile));
@@ -59,6 +66,7 @@ class DocumentProcessingWorkflowPersistenceIntegrationTest {
         // Assert
         assertThat(result.successful()).isTrue();
         assertThat(result.persisted()).isTrue();
+        assertThat(result.status()).isEqualTo(ProcessingStatus.SUCCESS);
         assertThat(result.duplicateCheckResult()).isNotNull();
         assertThat(result.duplicateCheckResult().duplicate()).isFalse();
         assertThat(result.archiveResult()).isNotNull();
@@ -71,6 +79,9 @@ class DocumentProcessingWorkflowPersistenceIntegrationTest {
         assertThat(persistedInvoice.invoiceNumber()).isEqualTo("MOCK-2026-001");
         assertThat(persistedInvoice.supplier().name()).isEqualTo("Mock Supplier GmbH");
         assertThat(persistedInvoice.grossAmount().amount()).isEqualByComparingTo("119.00");
+        assertThat(historyRepository.findAll()).hasSize(1);
+        assertThat(historyRepository.findAll().getFirst().status()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(historyRepository.findAll().getFirst().invoiceNumber()).isEqualTo("MOCK-2026-001");
     }
 
     private OcrStep ocrStep() {

@@ -27,6 +27,7 @@ import de.frank.invoice.worker.infrastructure.ocr.OcrService;
 import de.frank.invoice.worker.infrastructure.pdf.MockPdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
 
 import java.util.Objects;
 
@@ -134,4 +135,3 @@ public class InvoiceWorkerFactory {
         return new ExternalOcrService(configuration.ocr());
     }
 }
-

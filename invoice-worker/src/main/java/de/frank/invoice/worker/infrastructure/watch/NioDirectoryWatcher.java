@@ -27,6 +27,7 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
 
     private final Path directory;
     private final Runnable readyListener;
+    private volatile boolean closing;
     private WatchService watchService;
 
     /**
@@ -56,6 +57,7 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
             throw new WatchServiceException("Watch directory does not exist: " + directory);
         }
         try (WatchService service = directory.getFileSystem().newWatchService()) {
+            closing = false;
             watchService = service;
             directory.register(
                     service,
@@ -74,6 +76,9 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
                     }
                 }
                 if (!key.reset()) {
+                    if (closing) {
+                        return;
+                    }
                     throw new WatchServiceException("Watch key is no longer valid for directory: " + directory);
                 }
             }
@@ -90,6 +95,7 @@ public class NioDirectoryWatcher implements DirectoryWatcher {
 
     @Override
     public void close() {
+        closing = true;
         final WatchService service = watchService;
         if (service != null) {
             try {
