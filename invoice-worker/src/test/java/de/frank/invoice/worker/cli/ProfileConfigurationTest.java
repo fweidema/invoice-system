@@ -40,6 +40,13 @@ class ProfileConfigurationTest {
     }
 
     @Test
+    void serveCommandIsAccepted() {
+        final CliOptions options = CliOptions.parse(new String[]{"serve"});
+
+        assertThat(options.command()).isEqualTo(CliCommand.SERVE);
+    }
+
+    @Test
     void explicitCliOptionsOverrideProfile() {
         final CliOptions options = CliOptions.parse(new String[]{"process", "--profile", "production", "--config", "application.properties", "--skip-ocr", "--mock-text"});
 

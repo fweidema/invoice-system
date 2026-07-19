@@ -47,3 +47,28 @@ services:
       - no-new-privileges:true
     cap_drop:
       - ALL
+  invoice-worker-api:
+    profiles:
+      - api
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command:
+      - serve
+      - --profile
+      - production
+      - --config
+      - /config/application.properties
+    restart: unless-stopped
+    stop_grace_period: 15s
+    mem_limit: 512m
+    ports:
+      - "${INVOICE_API_PORT:-8080}:8080"
+    volumes:
+      - ./runtime/database:/data/database
+      - ./runtime/logs:/data/logs
+      - ./docker/application.properties:/config/application.properties:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

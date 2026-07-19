@@ -2,6 +2,7 @@ package de.frank.invoice.worker;
 
 import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.InvoiceWorkerFactory;
+import de.frank.invoice.worker.application.configuration.ApiConfiguration;
 import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
 import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
 import de.frank.invoice.worker.application.configuration.WatchConfiguration;
@@ -13,6 +14,9 @@ import de.frank.invoice.worker.cli.CliHelpPrinter;
 import de.frank.invoice.worker.cli.CliOptions;
 import de.frank.invoice.worker.cli.ConsoleBatchProcessingListener;
 import de.frank.invoice.worker.cli.InvoiceWorkerCli;
+import de.frank.invoice.worker.infrastructure.http.ReadOnlyApiServer;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
 import de.frank.invoice.worker.infrastructure.watch.NioDirectoryWatcher;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -79,6 +83,10 @@ public class InvoiceWorkerApplication {
         final Logger log = LoggerFactory.getLogger(InvoiceWorkerApplication.class);
         log.info("Invoice Worker application starting");
 
+        if (options.command() == CliCommand.SERVE) {
+            return runApi(configuration, options, out);
+        }
+
         final ConsoleBatchProcessingListener listener = new ConsoleBatchProcessingListener(out);
         final InvoiceWorker invoiceWorker = invoiceWorkerFactory.create(
                 configuration,
@@ -99,6 +107,25 @@ public class InvoiceWorkerApplication {
                 options,
                 watchServiceRunner)
                 .run(args);
+    }
+
+    private static int runApi(
+            final ApplicationConfiguration configuration,
+            final CliOptions options,
+            final PrintStream out) {
+        final ApiConfiguration apiConfiguration = configuration.api();
+        final ReadOnlyApiServer apiServer = new ReadOnlyApiServer(
+                apiConfiguration,
+                new SQLiteInvoiceRepository(configuration.persistence().databaseFile()),
+                new SQLiteProcessingHistoryRepository(configuration.persistence().databaseFile()));
+        Runtime.getRuntime().addShutdownHook(new Thread(apiServer::requestShutdown, "invoice-api-shutdown"));
+        out.println("Invoice Worker API gestartet");
+        out.println("Profil: " + options.profile().profileName());
+        out.println("Konfigurationsdatei: " + options.optionalConfigFile().map(java.nio.file.Path::toString).orElse("<intern>"));
+        out.println("API: http://" + apiConfiguration.host() + ":" + apiConfiguration.port());
+        out.println("Datenbank: " + configuration.persistence().databaseFile());
+        out.println();
+        return apiServer.run();
     }
 
     private static WatchServiceRunner watchServiceRunner(

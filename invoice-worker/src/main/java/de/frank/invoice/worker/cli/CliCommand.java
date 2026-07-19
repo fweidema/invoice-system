@@ -7,7 +7,8 @@ import java.util.Locale;
  */
 public enum CliCommand {
     PROCESS,
-    WATCH;
+    WATCH,
+    SERVE;
 
     /**
      * Parses a command name.

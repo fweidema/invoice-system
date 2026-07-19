@@ -102,7 +102,9 @@ public class InvoiceWorkerFactory {
                 new InvoiceValidator(),
                 new DuplicateDetector(invoiceRepository),
                 invoiceRepository,
-                new FileSystemArchiveService(configuration.archive().archiveDirectory()));
+                new FileSystemArchiveService(configuration.archive().archiveDirectory()),
+                new SQLiteProcessingHistoryRepository(configuration.persistence().databaseFile()),
+                java.time.Clock.systemUTC());
         final BatchProcessor batchProcessor = new BatchProcessor(workflow, listener);
         final BatchProcessingApplicationService applicationService = new BatchProcessingApplicationService(
                 new DocumentImporter(),

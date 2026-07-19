@@ -13,6 +13,7 @@ import java.util.Objects;
  * @param ai AI configuration
  * @param batch batch processing configuration
  * @param watch watch service configuration
+ * @param api read-only API configuration
  * @param logging logging configuration
  */
 public record ApplicationConfiguration(
@@ -22,6 +23,7 @@ public record ApplicationConfiguration(
         AiConfiguration ai,
         BatchConfiguration batch,
         WatchConfiguration watch,
+        ApiConfiguration api,
         LoggingConfiguration logging) {
 
     /**
@@ -39,7 +41,15 @@ public record ApplicationConfiguration(
             final OcrConfiguration ocr,
             final AiConfiguration ai,
             final BatchConfiguration batch) {
-        this(archive, persistence, ocr, ai, batch, defaultWatchConfiguration(), new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL));
+        this(
+                archive,
+                persistence,
+                ocr,
+                ai,
+                batch,
+                defaultWatchConfiguration(),
+                defaultApiConfiguration(),
+                new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL));
     }
 
     /**
@@ -52,6 +62,7 @@ public record ApplicationConfiguration(
         Objects.requireNonNull(ai, "ai must not be null");
         Objects.requireNonNull(batch, "batch must not be null");
         Objects.requireNonNull(watch, "watch must not be null");
+        Objects.requireNonNull(api, "api must not be null");
         Objects.requireNonNull(logging, "logging must not be null");
     }
 
@@ -63,5 +74,9 @@ public record ApplicationConfiguration(
                 Duration.ofMinutes(5),
                 Duration.ofSeconds(10),
                 true);
+    }
+
+    private static ApiConfiguration defaultApiConfiguration() {
+        return new ApiConfiguration("127.0.0.1", 8080, Duration.ofSeconds(10));
     }
 }
