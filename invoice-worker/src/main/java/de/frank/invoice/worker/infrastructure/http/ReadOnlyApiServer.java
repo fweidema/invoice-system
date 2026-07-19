@@ -13,12 +13,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetSocketAddress;
-import java.net.URI;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -31,7 +33,8 @@ import java.util.concurrent.TimeUnit;
 public class ReadOnlyApiServer implements AutoCloseable {
 
     private static final Logger LOG = LoggerFactory.getLogger(ReadOnlyApiServer.class);
-    private static final String CONTENT_TYPE = "application/json; charset=utf-8";
+    private static final String JSON_CONTENT_TYPE = "application/json; charset=utf-8";
+    private static final Map<String, StaticResource> STATIC_RESOURCES = staticResources();
     private static final String METHOD_GET = "GET";
     private static final String PATH_HEALTH = "/health";
     private static final String PATH_API_HEALTH = "/api/health";
@@ -111,11 +114,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
         server.createContext(PATH_API_HEALTH, exchange -> handle(exchange, this::handleHealth));
         server.createContext(PATH_INVOICES, exchange -> handle(exchange, this::handleInvoices));
         server.createContext(PATH_HISTORY, exchange -> handle(exchange, this::handleProcessingHistory));
-        server.createContext("/", exchange -> handle(exchange, current -> writeError(
-                current,
-                HTTP_NOT_FOUND,
-                "NOT_FOUND",
-                "Endpoint not found.")));
+        server.createContext("/", exchange -> handle(exchange, this::handleStaticResource));
         executorService = Executors.newCachedThreadPool();
         server.setExecutor(executorService);
         server.start();
@@ -177,6 +176,24 @@ public class ReadOnlyApiServer implements AutoCloseable {
             LOG.warn("Read-only API response could not be written", exception);
         } finally {
             exchange.close();
+        }
+    }
+
+    private void handleStaticResource(final HttpExchange exchange) throws IOException {
+        if (!ensureGet(exchange)) {
+            return;
+        }
+        final String path = exchange.getRequestURI().getPath();
+        final StaticResource resource = STATIC_RESOURCES.get(path);
+        if (resource == null) {
+            writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+            return;
+        }
+        final byte[] body = readResource(resource.classpathLocation());
+        exchange.getResponseHeaders().set("Content-Type", resource.contentType());
+        exchange.sendResponseHeaders(HTTP_OK, body.length);
+        try (OutputStream outputStream = exchange.getResponseBody()) {
+            outputStream.write(body);
         }
     }
 
@@ -254,10 +271,19 @@ public class ReadOnlyApiServer implements AutoCloseable {
 
     private void writeJson(final HttpExchange exchange, final int statusCode, final Object response) throws IOException {
         final byte[] body = serialize(response);
-        exchange.getResponseHeaders().set("Content-Type", CONTENT_TYPE);
+        exchange.getResponseHeaders().set("Content-Type", JSON_CONTENT_TYPE);
         exchange.sendResponseHeaders(statusCode, body.length);
         try (OutputStream outputStream = exchange.getResponseBody()) {
             outputStream.write(body);
+        }
+    }
+
+    private byte[] readResource(final String classpathLocation) throws IOException {
+        try (InputStream inputStream = ReadOnlyApiServer.class.getResourceAsStream(classpathLocation)) {
+            if (inputStream == null) {
+                throw new IOException("Static resource not found: " + classpathLocation);
+            }
+            return inputStream.readAllBytes();
         }
     }
 
@@ -269,8 +295,21 @@ public class ReadOnlyApiServer implements AutoCloseable {
         return URLDecoder.decode(value, StandardCharsets.UTF_8);
     }
 
+    private static Map<String, StaticResource> staticResources() {
+        final Map<String, StaticResource> resources = new HashMap<>();
+        final StaticResource index = new StaticResource("/static/index.html", "text/html; charset=utf-8");
+        resources.put("/", index);
+        resources.put("/dashboard", index);
+        resources.put("/css/dashboard.css", new StaticResource("/static/css/dashboard.css", "text/css; charset=utf-8"));
+        resources.put("/js/dashboard.js", new StaticResource("/static/js/dashboard.js", "application/javascript; charset=utf-8"));
+        return Map.copyOf(resources);
+    }
+
     private interface ExchangeHandler {
         void handle(HttpExchange exchange) throws IOException;
+    }
+
+    private record StaticResource(String classpathLocation, String contentType) {
     }
 
     public record HealthResponse(String status) {
