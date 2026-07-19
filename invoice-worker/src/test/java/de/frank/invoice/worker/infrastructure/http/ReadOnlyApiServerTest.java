@@ -93,6 +93,7 @@ class ReadOnlyApiServerTest {
         assertThat(javascript.statusCode()).isEqualTo(200);
         assertThat(contentType(javascript)).contains("application/javascript");
         assertThat(javascript.body()).contains("/api/invoices");
+        assertThat(javascript.body()).doesNotContain("cell(\"Verarbeitung\")");
     }
 
     @Test

@@ -101,7 +101,6 @@
                 cell(formatDateTime(entry.finishedAt || entry.startedAt)),
                 cell(entry.originalFilename || "-"),
                 statusCell(entry.status),
-                cell("Verarbeitung"),
                 cell(vendorForHistory(entry)),
                 cell(amountForHistory(entry))
             );
