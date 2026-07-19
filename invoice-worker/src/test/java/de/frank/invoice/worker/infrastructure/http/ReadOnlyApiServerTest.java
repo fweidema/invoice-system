@@ -46,6 +46,105 @@ class ReadOnlyApiServerTest {
         }
     }
 
+
+    @Test
+    void dashboardStartPageIsServed() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/");
+
+        // Assert
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(contentType(response)).contains("text/html");
+        assertThat(response.body()).contains("Invoice Monitoring");
+        assertThat(response.body()).contains("/css/dashboard.css");
+        assertThat(response.body()).contains("/js/dashboard.js");
+    }
+
+    @Test
+    void dashboardAliasIsServed() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/dashboard");
+
+        // Assert
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(contentType(response)).contains("text/html");
+        assertThat(response.body()).contains("Monitoring");
+    }
+
+    @Test
+    void dashboardCssAndJavascriptAreServedWithCorrectContentTypes() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> css = get("/css/dashboard.css");
+        final HttpResponse<String> javascript = get("/js/dashboard.js");
+
+        // Assert
+        assertThat(css.statusCode()).isEqualTo(200);
+        assertThat(contentType(css)).contains("text/css");
+        assertThat(css.body()).contains(".dashboard-shell");
+        assertThat(javascript.statusCode()).isEqualTo(200);
+        assertThat(contentType(javascript)).contains("application/javascript");
+        assertThat(javascript.body()).contains("/api/invoices");
+    }
+
+    @Test
+    void unknownStaticResourceReturnsJsonNotFound() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/css/missing.css");
+
+        // Assert
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(contentType(response)).contains("application/json");
+        assertThat(json(response).get("error").get("code").asText()).isEqualTo("NOT_FOUND");
+    }
+
+    @Test
+    void staticResourcesRejectPathTraversal() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/css/%2e%2e/application.properties");
+
+        // Assert
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(contentType(response)).contains("application/json");
+        assertThat(response.body()).doesNotContain("persistence.databaseFile");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void restEndpointsKeepReturningJsonAfterStaticResourcesWereAdded() throws Exception {
+        // Arrange
+        final InMemoryInvoiceRepository invoiceRepository = new InMemoryInvoiceRepository();
+        invoiceRepository.save(invoice("INV-001"));
+        final InMemoryProcessingHistoryRepository historyRepository = new InMemoryProcessingHistoryRepository();
+        historyRepository.save(historyEntry());
+        startServer(invoiceRepository, historyRepository);
+
+        // Act
+        final HttpResponse<String> invoices = get("/api/invoices");
+        final HttpResponse<String> history = get("/api/processing-history");
+
+        // Assert
+        assertThat(invoices.statusCode()).isEqualTo(200);
+        assertThat(contentType(invoices)).contains("application/json");
+        assertThat(json(invoices)).hasSize(1);
+        assertThat(history.statusCode()).isEqualTo(200);
+        assertThat(contentType(history)).contains("application/json");
+        assertThat(json(history)).hasSize(1);
+    }
     @Test
     void healthReturnsSystemStatus() throws Exception {
         // Arrange
@@ -178,6 +277,10 @@ class ReadOnlyApiServerTest {
 
     private URI uri(final String path) {
         return URI.create("http://127.0.0.1:" + server.port() + path);
+    }
+
+    private String contentType(final HttpResponse<String> response) {
+        return response.headers().firstValue("Content-Type").orElse("");
     }
 
     private JsonNode json(final HttpResponse<String> response) throws Exception {

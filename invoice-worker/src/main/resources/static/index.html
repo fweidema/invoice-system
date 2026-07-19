@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="de">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Invoice Monitoring</title>
+    <link rel="stylesheet" href="/css/dashboard.css">
+</head>
+<body>
+<header class="app-header">
+    <div>
+        <p class="eyebrow">Invoice System</p>
+        <h1>Monitoring</h1>
+    </div>
+    <div class="header-status" aria-live="polite">
+        <span id="server-status" class="status-dot status-unknown"></span>
+        <span id="server-status-text">Server wird geprueft</span>
+    </div>
+</header>
+
+<main class="dashboard-shell">
+    <section class="summary-grid" aria-label="Systemstatus">
+        <article class="metric-panel">
+            <span class="metric-label">API</span>
+            <strong id="api-status">Unbekannt</strong>
+        </article>
+        <article class="metric-panel">
+            <span class="metric-label">Uhrzeit</span>
+            <strong id="current-time">-</strong>
+        </article>
+        <article class="metric-panel">
+            <span class="metric-label">Rechnungen</span>
+            <strong id="invoice-count">0</strong>
+        </article>
+        <article class="metric-panel">
+            <span class="metric-label">Verarbeitungen</span>
+            <strong id="history-count">0</strong>
+        </article>
+    </section>
+
+    <section id="error-banner" class="error-banner" hidden aria-live="polite"></section>
+
+    <div class="content-grid">
+        <section class="data-section">
+            <div class="section-heading">
+                <h2>Letzte Verarbeitungen</h2>
+                <span id="history-updated" class="muted">Noch nicht aktualisiert</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Datum</th>
+                        <th>Datei</th>
+                        <th>Status</th>
+                        <th>Kategorie</th>
+                        <th>Vendor</th>
+                        <th>Betrag</th>
+                    </tr>
+                    </thead>
+                    <tbody id="history-table"></tbody>
+                </table>
+                <p id="history-empty" class="empty-state" hidden>Keine Verarbeitungseintraege vorhanden.</p>
+            </div>
+        </section>
+
+        <section class="data-section">
+            <div class="section-heading">
+                <h2>Rechnungen</h2>
+                <span id="invoice-updated" class="muted">Noch nicht aktualisiert</span>
+            </div>
+            <div class="table-wrap">
+                <table>
+                    <thead>
+                    <tr>
+                        <th>Rechnungsdatum</th>
+                        <th>Lieferant</th>
+                        <th>Rechnungsnummer</th>
+                        <th>Betrag</th>
+                        <th>Kategorie</th>
+                    </tr>
+                    </thead>
+                    <tbody id="invoice-table"></tbody>
+                </table>
+                <p id="invoice-empty" class="empty-state" hidden>Keine Rechnungen vorhanden.</p>
+            </div>
+        </section>
+    </div>
+
+    <section class="detail-section" aria-label="Detailansicht">
+        <div class="section-heading">
+            <h2>Details</h2>
+            <span id="detail-type" class="muted">Keine Auswahl</span>
+        </div>
+        <dl id="detail-list" class="detail-list">
+            <div>
+                <dt>Hinweis</dt>
+                <dd>Waehle eine Tabellenzeile aus.</dd>
+            </div>
+        </dl>
+    </section>
+</main>
+
+<script src="/js/dashboard.js" defer></script>
+</body>
+</html>
