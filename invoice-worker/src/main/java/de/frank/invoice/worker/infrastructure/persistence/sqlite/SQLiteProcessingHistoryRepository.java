@@ -1,6 +1,9 @@
 package de.frank.invoice.worker.infrastructure.persistence.sqlite;
 
+import de.frank.invoice.worker.application.persistence.PageResult;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
+import de.frank.invoice.worker.application.persistence.ProcessingHistorySearchCriteria;
+import de.frank.invoice.worker.application.persistence.SortDirection;
 import de.frank.invoice.worker.domain.processing.ProcessingHistoryEntry;
 import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 
@@ -16,6 +19,7 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * SQLite-backed processing history repository.
@@ -55,6 +59,16 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
             ON processing_history(status)
             """;
 
+    private static final String CREATE_INVOICE_NUMBER_INDEX = """
+            CREATE INDEX IF NOT EXISTS idx_processing_history_invoice_number
+            ON processing_history(invoice_number)
+            """;
+
+    private static final String CREATE_FINISHED_AT_INDEX = """
+            CREATE INDEX IF NOT EXISTS idx_processing_history_finished_at
+            ON processing_history(finished_at)
+            """;
+
     private static final String INSERT_HISTORY = """
             INSERT INTO processing_history (
                 document_id,
@@ -80,6 +94,16 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
             ORDER BY id
             """;
 
+    private static final String SELECT_BY_DOCUMENT_ID = """
+            SELECT * FROM processing_history
+            WHERE document_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """;
+
+    private static final String COUNT_HISTORY_PREFIX = "SELECT COUNT(*) FROM processing_history";
+    private static final String SEARCH_HISTORY_PREFIX = "SELECT * FROM processing_history";
+
     private final Path databasePath;
 
     /**
@@ -101,6 +125,50 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new PersistenceException("Could not save processing history for document: " + entry.documentId(), exception);
+        }
+    }
+
+    @Override
+    public Optional<ProcessingHistoryEntry> findByDocumentId(final String documentId) {
+        Objects.requireNonNull(documentId, "documentId must not be null");
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_BY_DOCUMENT_ID)) {
+            statement.setString(1, documentId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                if (resultSet.next()) {
+                    return Optional.of(mapEntry(resultSet));
+                }
+                return Optional.empty();
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load processing history for document: " + documentId, exception);
+        }
+    }
+
+    @Override
+    public PageResult<ProcessingHistoryEntry> search(final ProcessingHistorySearchCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria must not be null");
+        final List<Object> parameters = new ArrayList<>();
+        final String whereClause = historyWhereClause(criteria, parameters);
+        final long totalElements = count(COUNT_HISTORY_PREFIX + whereClause, parameters, "Could not count processing history");
+        final String sql = SEARCH_HISTORY_PREFIX
+                + whereClause
+                + historyOrderBy(criteria)
+                + " LIMIT ? OFFSET ?";
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            int parameterIndex = bindParameters(statement, parameters, 1);
+            statement.setInt(parameterIndex++, criteria.size());
+            statement.setInt(parameterIndex, criteria.page() * criteria.size());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                final List<ProcessingHistoryEntry> entries = new ArrayList<>();
+                while (resultSet.next()) {
+                    entries.add(mapEntry(resultSet));
+                }
+                return new PageResult<>(entries, criteria.page(), criteria.size(), totalElements, criteria.sort(), criteria.direction());
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not search processing history", exception);
         }
     }
 
@@ -130,10 +198,76 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
                 statement.execute(CREATE_PROCESSING_HISTORY_TABLE);
                 statement.execute(CREATE_DOCUMENT_INDEX);
                 statement.execute(CREATE_STATUS_INDEX);
+                statement.execute(CREATE_INVOICE_NUMBER_INDEX);
+                statement.execute(CREATE_FINISHED_AT_INDEX);
             }
         } catch (Exception exception) {
             throw new PersistenceException("Could not initialize processing history table: " + databasePath, exception);
         }
+    }
+
+    private String historyWhereClause(final ProcessingHistorySearchCriteria criteria, final List<Object> parameters) {
+        final List<String> conditions = new ArrayList<>();
+        if (criteria.query() != null) {
+            conditions.add("(LOWER(document_id) LIKE ? OR LOWER(original_filename) LIKE ? OR LOWER(invoice_number) LIKE ?)");
+            final String query = like(criteria.query());
+            parameters.add(query);
+            parameters.add(query);
+            parameters.add(query);
+        }
+        if (criteria.status() != null) {
+            conditions.add("status = ?");
+            parameters.add(criteria.status().name());
+        }
+        if (criteria.invoiceNumber() != null) {
+            conditions.add("LOWER(invoice_number) LIKE ?");
+            parameters.add(like(criteria.invoiceNumber()));
+        }
+        if (conditions.isEmpty()) {
+            return "";
+        }
+        return " WHERE " + String.join(" AND ", conditions);
+    }
+
+    private String historyOrderBy(final ProcessingHistorySearchCriteria criteria) {
+        final String column = switch (criteria.sort()) {
+            case "finishedAt" -> "finished_at";
+            case "startedAt" -> "started_at";
+            case "status" -> "status";
+            case "originalFilename" -> "original_filename";
+            case "invoiceNumber" -> "invoice_number";
+            case "durationMillis" -> "duration_ms";
+            default -> throw new IllegalArgumentException("Unsupported processing history sort field: " + criteria.sort());
+        };
+        final String direction = criteria.direction() == SortDirection.ASC ? " ASC" : " DESC";
+        return " ORDER BY " + column + direction + ", id" + direction;
+    }
+
+    private long count(final String sql, final List<Object> parameters, final String failureMessage) {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            bindParameters(statement, parameters, 1);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getLong(1) : 0;
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException(failureMessage, exception);
+        }
+    }
+
+    private int bindParameters(
+            final PreparedStatement statement,
+            final List<Object> parameters,
+            final int startIndex) throws SQLException {
+        int parameterIndex = startIndex;
+        for (final Object parameter : parameters) {
+            statement.setObject(parameterIndex++, parameter);
+        }
+        return parameterIndex;
+    }
+
+    private String like(final String value) {
+        return "%" + value.toLowerCase() + "%";
     }
 
     private Connection openConnection() throws SQLException {

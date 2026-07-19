@@ -2,11 +2,13 @@
     "use strict";
 
     const refreshIntervalMillis = 60000;
+    const pageSize = 20;
     const state = {
-        invoices: [],
-        history: [],
-        selectedKey: null,
-        timer: null
+        invoices: emptyPage("invoiceDate", "DESC"),
+        history: emptyPage("finishedAt", "DESC"),
+        invoicePage: 0,
+        historyPage: 0,
+        selectedKey: null
     };
 
     const elements = {
@@ -24,34 +26,80 @@
         historyUpdated: document.querySelector("#history-updated"),
         invoiceUpdated: document.querySelector("#invoice-updated"),
         detailType: document.querySelector("#detail-type"),
-        detailList: document.querySelector("#detail-list")
+        detailList: document.querySelector("#detail-list"),
+        historyQuery: document.querySelector("#history-query"),
+        historyStatus: document.querySelector("#history-status"),
+        historySort: document.querySelector("#history-sort"),
+        historyDirection: document.querySelector("#history-direction"),
+        historyPrev: document.querySelector("#history-prev"),
+        historyNext: document.querySelector("#history-next"),
+        historyPageInfo: document.querySelector("#history-page-info"),
+        invoiceQuery: document.querySelector("#invoice-query"),
+        invoiceSupplier: document.querySelector("#invoice-supplier"),
+        invoiceSort: document.querySelector("#invoice-sort"),
+        invoiceDirection: document.querySelector("#invoice-direction"),
+        invoicePrev: document.querySelector("#invoice-prev"),
+        invoiceNext: document.querySelector("#invoice-next"),
+        invoicePageInfo: document.querySelector("#invoice-page-info")
     };
 
     document.addEventListener("DOMContentLoaded", () => {
+        bindControls();
         updateClock();
         void refreshData();
-        state.timer = window.setInterval(() => {
+        window.setInterval(() => {
             updateClock();
             void refreshData();
         }, refreshIntervalMillis);
     });
 
+    function bindControls() {
+        [elements.historyQuery, elements.historyStatus, elements.historySort, elements.historyDirection].forEach((control) => {
+            control.addEventListener("input", () => {
+                state.historyPage = 0;
+                void refreshHistory();
+            });
+        });
+        [elements.invoiceQuery, elements.invoiceSupplier, elements.invoiceSort, elements.invoiceDirection].forEach((control) => {
+            control.addEventListener("input", () => {
+                state.invoicePage = 0;
+                void refreshInvoices();
+            });
+        });
+        elements.historyPrev.addEventListener("click", () => changeHistoryPage(-1));
+        elements.historyNext.addEventListener("click", () => changeHistoryPage(1));
+        elements.invoicePrev.addEventListener("click", () => changeInvoicePage(-1));
+        elements.invoiceNext.addEventListener("click", () => changeInvoicePage(1));
+    }
+
     async function refreshData() {
         try {
-            const [health, invoices, history] = await Promise.all([
-                fetchJson("/api/health"),
-                fetchJson("/api/invoices"),
-                fetchJson("/api/processing-history")
-            ]);
-            state.invoices = Array.isArray(invoices) ? invoices : [];
-            state.history = Array.isArray(history) ? history : [];
+            const health = await fetchJson("/api/health");
             setOnline(health && health.status === "UP");
-            renderAll();
+            await Promise.all([refreshInvoices(), refreshHistory()]);
             clearError();
         } catch (error) {
             setOnline(false);
             showError("Die REST-API ist aktuell nicht erreichbar. Vorhandene Daten bleiben sichtbar.");
         }
+    }
+
+    async function refreshInvoices() {
+        const page = await fetchJson("/api/invoices?" + invoiceQueryString());
+        state.invoices = page;
+        renderInvoices();
+        elements.invoiceCount.textContent = String(page.totalElements || 0);
+        elements.invoiceUpdated.textContent = "Aktualisiert " + formatTime(new Date());
+        updateSelection();
+    }
+
+    async function refreshHistory() {
+        const page = await fetchJson("/api/processing-history?" + historyQueryString());
+        state.history = page;
+        renderHistory();
+        elements.historyCount.textContent = String(page.totalElements || 0);
+        elements.historyUpdated.textContent = "Aktualisiert " + formatTime(new Date());
+        updateSelection();
     }
 
     async function fetchJson(url) {
@@ -62,21 +110,39 @@
         return response.json();
     }
 
-    function renderAll() {
-        elements.invoiceCount.textContent = String(state.invoices.length);
-        elements.historyCount.textContent = String(state.history.length);
-        renderInvoices();
-        renderHistory();
-        updateSelection();
-        const timestamp = "Aktualisiert " + formatTime(new Date());
-        elements.invoiceUpdated.textContent = timestamp;
-        elements.historyUpdated.textContent = timestamp;
+    function invoiceQueryString() {
+        const parameters = new URLSearchParams();
+        parameters.set("page", String(state.invoicePage));
+        parameters.set("size", String(pageSize));
+        parameters.set("sort", elements.invoiceSort.value);
+        parameters.set("direction", elements.invoiceDirection.value);
+        append(parameters, "q", elements.invoiceQuery.value);
+        append(parameters, "supplier", elements.invoiceSupplier.value);
+        return parameters.toString();
+    }
+
+    function historyQueryString() {
+        const parameters = new URLSearchParams();
+        parameters.set("page", String(state.historyPage));
+        parameters.set("size", String(pageSize));
+        parameters.set("sort", elements.historySort.value);
+        parameters.set("direction", elements.historyDirection.value);
+        append(parameters, "q", elements.historyQuery.value);
+        append(parameters, "status", elements.historyStatus.value);
+        return parameters.toString();
+    }
+
+    function append(parameters, name, value) {
+        if (value && value.trim()) {
+            parameters.set(name, value.trim());
+        }
     }
 
     function renderInvoices() {
+        const items = state.invoices.items || [];
         elements.invoiceTable.replaceChildren();
-        elements.invoiceEmpty.hidden = state.invoices.length > 0;
-        state.invoices.forEach((invoice) => {
+        elements.invoiceEmpty.hidden = items.length > 0;
+        items.forEach((invoice) => {
             const row = document.createElement("tr");
             row.dataset.key = "invoice:" + safeText(invoice.invoiceNumber);
             row.append(
@@ -89,24 +155,45 @@
             row.addEventListener("click", () => selectInvoice(invoice.invoiceNumber));
             elements.invoiceTable.append(row);
         });
+        renderPagination(state.invoices, elements.invoicePrev, elements.invoiceNext, elements.invoicePageInfo);
     }
 
     function renderHistory() {
+        const items = state.history.items || [];
         elements.historyTable.replaceChildren();
-        elements.historyEmpty.hidden = state.history.length > 0;
-        state.history.slice().reverse().forEach((entry) => {
+        elements.historyEmpty.hidden = items.length > 0;
+        items.forEach((entry) => {
             const row = document.createElement("tr");
             row.dataset.key = "history:" + safeText(entry.documentId);
             row.append(
                 cell(formatDateTime(entry.finishedAt || entry.startedAt)),
                 cell(entry.originalFilename || "-"),
                 statusCell(entry.status),
-                cell(vendorForHistory(entry)),
-                cell(amountForHistory(entry))
+                cell(entry.invoiceNumber || "-"),
+                cell(formatDuration(entry.durationMillis))
             );
             row.addEventListener("click", () => selectHistory(entry.documentId));
             elements.historyTable.append(row);
         });
+        renderPagination(state.history, elements.historyPrev, elements.historyNext, elements.historyPageInfo);
+    }
+
+    function renderPagination(page, previous, next, label) {
+        const totalPages = Math.max(page.totalPages || 0, 1);
+        const currentPage = (page.page || 0) + 1;
+        label.textContent = "Seite " + currentPage + " von " + totalPages;
+        previous.disabled = currentPage <= 1;
+        next.disabled = currentPage >= totalPages;
+    }
+
+    function changeHistoryPage(delta) {
+        state.historyPage = Math.max(0, state.historyPage + delta);
+        void refreshHistory();
+    }
+
+    function changeInvoicePage(delta) {
+        state.invoicePage = Math.max(0, state.invoicePage + delta);
+        void refreshInvoices();
     }
 
     async function selectInvoice(invoiceNumber) {
@@ -129,26 +216,26 @@
         }
     }
 
-    function selectHistory(documentId) {
+    async function selectHistory(documentId) {
         state.selectedKey = "history:" + safeText(documentId);
         updateSelection();
-        const entry = state.history.find((candidate) => candidate.documentId === documentId);
-        if (!entry) {
-            showError("Der Verarbeitungseintrag ist nicht mehr in den geladenen Daten enthalten.");
-            return;
+        try {
+            const entry = await fetchJson("/api/processing-history/" + encodeURIComponent(documentId));
+            showDetails("Verarbeitung", [
+                ["Datei", entry.originalFilename],
+                ["Status", entry.status],
+                ["Rechnungsnummer", entry.invoiceNumber],
+                ["Erfolgreich", entry.successful ? "Ja" : "Nein"],
+                ["Persistiert", entry.persisted ? "Ja" : "Nein"],
+                ["Duplikat", entry.duplicateDetected ? "Ja" : "Nein"],
+                ["Gestartet", formatDateTime(entry.startedAt)],
+                ["Beendet", formatDateTime(entry.finishedAt)],
+                ["Dauer", formatDuration(entry.durationMillis)],
+                ["Fehler", entry.errorMessage]
+            ]);
+        } catch (error) {
+            showError("Details konnten nicht aktualisiert werden. Die vorhandenen Daten bleiben sichtbar.");
         }
-        showDetails("Verarbeitung", [
-            ["Datei", entry.originalFilename],
-            ["Status", entry.status],
-            ["Rechnungsnummer", entry.invoiceNumber],
-            ["Erfolgreich", entry.successful ? "Ja" : "Nein"],
-            ["Persistiert", entry.persisted ? "Ja" : "Nein"],
-            ["Duplikat", entry.duplicateDetected ? "Ja" : "Nein"],
-            ["Gestartet", formatDateTime(entry.startedAt)],
-            ["Beendet", formatDateTime(entry.finishedAt)],
-            ["Dauer", formatDuration(entry.durationMillis)],
-            ["Fehler", entry.errorMessage]
-        ]);
     }
 
     function showDetails(type, items) {
@@ -218,23 +305,6 @@
         }
     }
 
-    function vendorForHistory(entry) {
-        const invoice = invoiceForHistory(entry);
-        return invoice ? nested(invoice, "supplier", "name") || "-" : "-";
-    }
-
-    function amountForHistory(entry) {
-        const invoice = invoiceForHistory(entry);
-        return invoice ? formatMoney(invoice.grossAmount) : "-";
-    }
-
-    function invoiceForHistory(entry) {
-        if (!entry.invoiceNumber) {
-            return null;
-        }
-        return state.invoices.find((invoice) => invoice.invoiceNumber === entry.invoiceNumber) || null;
-    }
-
     function nested(object, first, second) {
         return object && object[first] ? object[first][second] : null;
     }
@@ -274,5 +344,9 @@
 
     function safeText(value) {
         return value === null || value === undefined ? "" : String(value);
+    }
+
+    function emptyPage(sort, direction) {
+        return { items: [], page: 0, size: pageSize, totalElements: 0, totalPages: 0, sort, direction };
     }
 })();

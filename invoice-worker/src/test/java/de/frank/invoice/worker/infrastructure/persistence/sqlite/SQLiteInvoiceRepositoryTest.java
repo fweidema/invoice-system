@@ -1,5 +1,8 @@
 package de.frank.invoice.worker.infrastructure.persistence.sqlite;
 
+import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
+import de.frank.invoice.worker.application.persistence.PageResult;
+import de.frank.invoice.worker.application.persistence.SortDirection;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.invoice.Invoice;
@@ -107,6 +110,56 @@ class SQLiteInvoiceRepositoryTest {
         assertThat(invoices)
                 .extracting(Invoice::invoiceNumber)
                 .containsExactly("INV-001", "INV-002");
+    }
+
+    @Test
+    void searchReturnsFilteredPageWithStableSort() {
+        // Arrange
+        final SQLiteInvoiceRepository repository = repository();
+        repository.save(invoice("INV-002"));
+        repository.save(invoice("INV-001"));
+        repository.save(invoice("BILL-003"));
+        final InvoiceSearchCriteria criteria = new InvoiceSearchCriteria(
+                0,
+                1,
+                "invoiceNumber",
+                SortDirection.ASC,
+                "INV",
+                null,
+                null,
+                null,
+                null);
+
+        // Act
+        final PageResult<Invoice> result = repository.search(criteria);
+
+        // Assert
+        assertThat(result.totalElements()).isEqualTo(2);
+        assertThat(result.totalPages()).isEqualTo(2);
+        assertThat(result.items())
+                .extracting(Invoice::invoiceNumber)
+                .containsExactly("INV-001");
+    }
+
+    @Test
+    void searchRejectsUnsupportedSortField() {
+        // Arrange
+        final SQLiteInvoiceRepository repository = repository();
+        final InvoiceSearchCriteria criteria = new InvoiceSearchCriteria(
+                0,
+                20,
+                "invoice_number DESC",
+                SortDirection.ASC,
+                null,
+                null,
+                null,
+                null,
+                null);
+
+        // Act / Assert
+        assertThatThrownBy(() -> repository.search(criteria))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("Unsupported invoice sort field");
     }
 
     @Test

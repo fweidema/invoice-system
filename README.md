@@ -96,12 +96,13 @@ Verwendete REST-Endpunkte:
 
 ```text
 GET /api/health
-GET /api/invoices
+GET /api/invoices?page=0&size=20&sort=invoiceDate&direction=DESC&q=&supplier=&invoiceNumber=&dateFrom=&dateTo=
 GET /api/invoices/{invoiceNumber}
-GET /api/processing-history
+GET /api/processing-history?page=0&size=20&sort=finishedAt&direction=DESC&q=&status=&invoiceNumber=
+GET /api/processing-history/{documentId}
 ```
 
-Das Dashboard aktualisiert die Daten alle 60 Sekunden ohne vollstaendigen Seiten-Reload. Es bietet keine Schreib-, Loesch- oder Downloadfunktionen und zeigt keine internen Dateipfade an.
+Die Listen-Endpunkte liefern ein Page-Objekt mit `items`, `page`, `size`, `totalElements`, `totalPages`, `sort` und `direction`. Filterwerte werden serverseitig in SQLite angewendet; Sortierfelder sind fest validiert. Das Dashboard aktualisiert die Daten alle 60 Sekunden ohne vollstaendigen Seiten-Reload. Es bietet keine Schreib-, Loesch- oder Downloadfunktionen und zeigt keine internen Dateipfade an.
 ## Konfiguration
 
 Die aktuelle Konfiguration wird Properties-basiert geladen. Wichtige Defaults:

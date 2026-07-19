@@ -141,11 +141,12 @@ class ReadOnlyApiServerTest {
         // Assert
         assertThat(invoices.statusCode()).isEqualTo(200);
         assertThat(contentType(invoices)).contains("application/json");
-        assertThat(json(invoices)).hasSize(1);
+        assertThat(json(invoices).get("items")).hasSize(1);
         assertThat(history.statusCode()).isEqualTo(200);
         assertThat(contentType(history)).contains("application/json");
-        assertThat(json(history)).hasSize(1);
+        assertThat(json(history).get("items")).hasSize(1);
     }
+
     @Test
     void healthReturnsSystemStatus() throws Exception {
         // Arrange
@@ -171,10 +172,13 @@ class ReadOnlyApiServerTest {
 
         // Assert
         final JsonNode body = json(response);
+        final JsonNode items = body.get("items");
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(body).hasSize(1);
-        assertThat(body.get(0).get("invoiceNumber").asText()).isEqualTo("INV-001");
-        assertThat(body.get(0).get("supplier").has("iban")).isFalse();
+        assertThat(items).hasSize(1);
+        assertThat(body.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(body.get("sort").asText()).isEqualTo("invoiceDate");
+        assertThat(items.get(0).get("invoiceNumber").asText()).isEqualTo("INV-001");
+        assertThat(items.get(0).get("supplier").has("iban")).isFalse();
     }
 
     @Test
@@ -221,10 +225,63 @@ class ReadOnlyApiServerTest {
 
         // Assert
         final JsonNode body = json(response);
+        final JsonNode items = body.get("items");
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(body).hasSize(1);
-        assertThat(body.get(0).get("status").asText()).isEqualTo("SUCCESS");
-        assertThat(body.get(0).has("originalPath")).isFalse();
+        assertThat(items).hasSize(1);
+        assertThat(body.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(body.get("sort").asText()).isEqualTo("finishedAt");
+        assertThat(items.get(0).get("status").asText()).isEqualTo("SUCCESS");
+        assertThat(items.get(0).has("originalPath")).isFalse();
+    }
+
+
+    @Test
+    void invalidListQueryReturnsUniformBadRequestWithoutInternals() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/invoices?sort=invoice_date%20DESC");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("BAD_REQUEST");
+        assertThat(response.body()).doesNotContain("SELECT");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void processingHistoryByDocumentIdReturnsSingleEntry() throws Exception {
+        // Arrange
+        final InMemoryProcessingHistoryRepository historyRepository = new InMemoryProcessingHistoryRepository();
+        historyRepository.save(historyEntry());
+        startServer(new InMemoryInvoiceRepository(), historyRepository);
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history/" + encode("document-1"));
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(body.get("documentId").asText()).isEqualTo("document-1");
+        assertThat(body.get("status").asText()).isEqualTo("SUCCESS");
+        assertThat(body.has("originalPath")).isFalse();
+    }
+
+    @Test
+    void missingProcessingHistoryByDocumentIdReturnsUniformJsonError() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history/MISSING");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("PROCESSING_HISTORY_NOT_FOUND");
+        assertThat(response.body()).doesNotContain("Exception");
     }
 
     @Test

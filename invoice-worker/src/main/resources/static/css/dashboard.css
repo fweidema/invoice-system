@@ -258,3 +258,52 @@ dd {
         grid-template-columns: 1fr;
     }
 }
+.filter-bar,
+.pagination {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+}
+
+.filter-bar label {
+    display: grid;
+    gap: 4px;
+    color: var(--muted);
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.filter-bar input,
+.filter-bar select {
+    min-width: 150px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 10px;
+    color: var(--text);
+    font: inherit;
+    text-transform: none;
+}
+
+.pagination {
+    justify-content: flex-end;
+    border-top: 1px solid var(--border);
+    border-bottom: 0;
+}
+
+.pagination button {
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+}
+
+.pagination button:disabled {
+    color: var(--muted);
+    cursor: not-allowed;
+}
