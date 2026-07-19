@@ -10,6 +10,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,7 +95,9 @@ class SQLiteProcessingHistoryRepositoryTest {
                 SortDirection.ASC,
                 null,
                 ProcessingStatus.SUCCESS,
-                "INV");
+                "INV",
+                null,
+                null);
 
         // Act
         final PageResult<ProcessingHistoryEntry> result = repository.search(criteria);
@@ -107,6 +110,34 @@ class SQLiteProcessingHistoryRepositoryTest {
                 .containsExactly("INV-001");
     }
 
+
+    @Test
+    void searchFiltersByStartedAtDateRangeAndEscapesLikeWildcards() {
+        // Arrange
+        final SQLiteProcessingHistoryRepository repository = repository();
+        final String literalInvoiceNeedle = "INV%_" + "\\";
+        repository.save(entry("document-1", "hash-1", literalInvoiceNeedle + "-001", ProcessingStatus.SUCCESS, Instant.parse("2026-06-27T23:59:59Z")));
+        repository.save(entry("document-2", "hash-2", "INVXX-001", ProcessingStatus.SUCCESS, Instant.parse("2026-06-27T12:00:00Z")));
+        repository.save(entry("document-3", "hash-3", literalInvoiceNeedle + "-002", ProcessingStatus.SUCCESS, Instant.parse("2026-06-28T00:00:00Z")));
+        final ProcessingHistorySearchCriteria criteria = new ProcessingHistorySearchCriteria(
+                0,
+                25,
+                "startedAt",
+                SortDirection.ASC,
+                "document-1",
+                ProcessingStatus.SUCCESS,
+                literalInvoiceNeedle,
+                LocalDate.of(2026, 6, 27),
+                LocalDate.of(2026, 6, 27));
+
+        // Act
+        final PageResult<ProcessingHistoryEntry> result = repository.search(criteria);
+
+        // Assert
+        assertThat(result.totalElements()).isEqualTo(1);
+        assertThat(result.items()).extracting(ProcessingHistoryEntry::documentId).containsExactly("document-1");
+    }
+
     @Test
     void searchRejectsUnsupportedSortField() {
         // Arrange
@@ -116,6 +147,8 @@ class SQLiteProcessingHistoryRepositoryTest {
                 20,
                 "finished_at DESC",
                 SortDirection.ASC,
+                null,
+                null,
                 null,
                 null,
                 null);

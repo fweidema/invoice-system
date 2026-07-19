@@ -2,6 +2,8 @@ package de.frank.invoice.worker.application.persistence;
 
 import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 
+import java.time.LocalDate;
+
 /**
  * Search criteria for processing history list queries.
  *
@@ -12,6 +14,8 @@ import de.frank.invoice.worker.domain.processing.ProcessingStatus;
  * @param query free text search
  * @param status processing status filter
  * @param invoiceNumber invoice number filter
+ * @param dateFrom inclusive started-at lower date bound
+ * @param dateTo inclusive started-at upper date bound
  */
 public record ProcessingHistorySearchCriteria(
         int page,
@@ -20,13 +24,15 @@ public record ProcessingHistorySearchCriteria(
         SortDirection direction,
         String query,
         ProcessingStatus status,
-        String invoiceNumber) {
+        String invoiceNumber,
+        LocalDate dateFrom,
+        LocalDate dateTo) {
 
     /**
      * Creates search criteria.
      */
     public ProcessingHistorySearchCriteria {
-        sort = sort == null || sort.isBlank() ? "finishedAt" : sort.trim();
+        sort = sort == null || sort.isBlank() ? "startedAt" : sort.trim();
         direction = direction == null ? SortDirection.DESC : direction;
         query = normalize(query);
         invoiceNumber = normalize(invoiceNumber);
@@ -35,6 +41,9 @@ public record ProcessingHistorySearchCriteria(
         }
         if (size < 1) {
             throw new IllegalArgumentException("size must be positive");
+        }
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            throw new IllegalArgumentException("dateFrom must not be after dateTo");
         }
     }
 

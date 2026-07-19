@@ -32,6 +32,8 @@ import java.util.Optional;
  */
 public class SQLiteInvoiceRepository implements InvoiceRepository {
 
+    private static final String LIKE_ESCAPE_CLAUSE = " ESCAPE '\\'";
+
     private static final String CREATE_INVOICES_TABLE = """
             CREATE TABLE IF NOT EXISTS invoices (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -250,7 +252,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
              PreparedStatement statement = connection.prepareStatement(sql)) {
             int parameterIndex = bindParameters(statement, parameters, 1);
             statement.setInt(parameterIndex++, criteria.size());
-            statement.setInt(parameterIndex, criteria.page() * criteria.size());
+            statement.setLong(parameterIndex, offset(criteria.page(), criteria.size()));
             try (ResultSet resultSet = statement.executeQuery()) {
                 final List<Invoice> invoices = new ArrayList<>();
                 while (resultSet.next()) {
@@ -349,18 +351,20 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
     private String invoiceWhereClause(final InvoiceSearchCriteria criteria, final List<Object> parameters) {
         final List<String> conditions = new ArrayList<>();
         if (criteria.query() != null) {
-            conditions.add("(LOWER(invoice_number) LIKE ? OR LOWER(supplier_name) LIKE ? OR LOWER(original_filename) LIKE ?)");
+            conditions.add("(LOWER(invoice_number) LIKE ?" + LIKE_ESCAPE_CLAUSE
+                    + " OR LOWER(supplier_name) LIKE ?" + LIKE_ESCAPE_CLAUSE
+                    + " OR LOWER(original_filename) LIKE ?" + LIKE_ESCAPE_CLAUSE + ")");
             final String query = like(criteria.query());
             parameters.add(query);
             parameters.add(query);
             parameters.add(query);
         }
         if (criteria.supplier() != null) {
-            conditions.add("LOWER(supplier_name) LIKE ?");
+            conditions.add("LOWER(supplier_name) LIKE ?" + LIKE_ESCAPE_CLAUSE);
             parameters.add(like(criteria.supplier()));
         }
         if (criteria.invoiceNumber() != null) {
-            conditions.add("LOWER(invoice_number) LIKE ?");
+            conditions.add("LOWER(invoice_number) LIKE ?" + LIKE_ESCAPE_CLAUSE);
             parameters.add(like(criteria.invoiceNumber()));
         }
         if (criteria.dateFrom() != null) {
@@ -413,8 +417,19 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
         return parameterIndex;
     }
 
+    private long offset(final int page, final int size) {
+        return Math.multiplyExact((long) page, (long) size);
+    }
+
     private String like(final String value) {
-        return "%" + value.toLowerCase() + "%";
+        return "%" + escapeLike(value.toLowerCase()) + "%";
+    }
+
+    private String escapeLike(final String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private boolean existsBySingleValue(

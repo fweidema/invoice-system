@@ -96,9 +96,9 @@ Verwendete REST-Endpunkte:
 
 ```text
 GET /api/health
-GET /api/invoices?page=0&size=20&sort=invoiceDate&direction=DESC&q=&supplier=&invoiceNumber=&dateFrom=&dateTo=
+GET /api/invoices?page=0&size=25&sort=importedAt&direction=DESC&q=&supplier=&invoiceNumber=&dateFrom=&dateTo=
 GET /api/invoices/{invoiceNumber}
-GET /api/processing-history?page=0&size=20&sort=finishedAt&direction=DESC&q=&status=&invoiceNumber=
+GET /api/processing-history?page=0&size=25&sort=startedAt&direction=DESC&q=&status=&invoiceNumber=&dateFrom=&dateTo=
 GET /api/processing-history/{documentId}
 ```
 

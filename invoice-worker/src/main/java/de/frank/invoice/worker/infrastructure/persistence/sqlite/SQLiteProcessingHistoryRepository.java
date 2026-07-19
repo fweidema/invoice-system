@@ -26,6 +26,8 @@ import java.util.Optional;
  */
 public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepository {
 
+    private static final String LIKE_ESCAPE_CLAUSE = " ESCAPE '\\'";
+
     private static final String MESSAGE_SEPARATOR = "\n";
 
     private static final String CREATE_PROCESSING_HISTORY_TABLE = """
@@ -159,7 +161,7 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
              PreparedStatement statement = connection.prepareStatement(sql)) {
             int parameterIndex = bindParameters(statement, parameters, 1);
             statement.setInt(parameterIndex++, criteria.size());
-            statement.setInt(parameterIndex, criteria.page() * criteria.size());
+            statement.setLong(parameterIndex, offset(criteria.page(), criteria.size()));
             try (ResultSet resultSet = statement.executeQuery()) {
                 final List<ProcessingHistoryEntry> entries = new ArrayList<>();
                 while (resultSet.next()) {
@@ -209,7 +211,9 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
     private String historyWhereClause(final ProcessingHistorySearchCriteria criteria, final List<Object> parameters) {
         final List<String> conditions = new ArrayList<>();
         if (criteria.query() != null) {
-            conditions.add("(LOWER(document_id) LIKE ? OR LOWER(original_filename) LIKE ? OR LOWER(invoice_number) LIKE ?)");
+            conditions.add("(LOWER(document_id) LIKE ?" + LIKE_ESCAPE_CLAUSE
+                    + " OR LOWER(original_filename) LIKE ?" + LIKE_ESCAPE_CLAUSE
+                    + " OR LOWER(invoice_number) LIKE ?" + LIKE_ESCAPE_CLAUSE + ")");
             final String query = like(criteria.query());
             parameters.add(query);
             parameters.add(query);
@@ -220,8 +224,16 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
             parameters.add(criteria.status().name());
         }
         if (criteria.invoiceNumber() != null) {
-            conditions.add("LOWER(invoice_number) LIKE ?");
+            conditions.add("LOWER(invoice_number) LIKE ?" + LIKE_ESCAPE_CLAUSE);
             parameters.add(like(criteria.invoiceNumber()));
+        }
+        if (criteria.dateFrom() != null) {
+            conditions.add("started_at >= ?");
+            parameters.add(criteria.dateFrom().atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toString());
+        }
+        if (criteria.dateTo() != null) {
+            conditions.add("started_at < ?");
+            parameters.add(criteria.dateTo().plusDays(1).atStartOfDay().toInstant(java.time.ZoneOffset.UTC).toString());
         }
         if (conditions.isEmpty()) {
             return "";
@@ -266,8 +278,19 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
         return parameterIndex;
     }
 
+    private long offset(final int page, final int size) {
+        return Math.multiplyExact((long) page, (long) size);
+    }
+
     private String like(final String value) {
-        return "%" + value.toLowerCase() + "%";
+        return "%" + escapeLike(value.toLowerCase()) + "%";
+    }
+
+    private String escapeLike(final String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private Connection openConnection() throws SQLException {

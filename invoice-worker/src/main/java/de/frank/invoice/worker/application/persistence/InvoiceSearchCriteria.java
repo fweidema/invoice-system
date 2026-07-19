@@ -30,7 +30,7 @@ public record InvoiceSearchCriteria(
      * Creates search criteria.
      */
     public InvoiceSearchCriteria {
-        sort = sort == null || sort.isBlank() ? "invoiceDate" : sort.trim();
+        sort = sort == null || sort.isBlank() ? "importedAt" : sort.trim();
         direction = direction == null ? SortDirection.DESC : direction;
         query = normalize(query);
         supplier = normalize(supplier);
@@ -40,6 +40,9 @@ public record InvoiceSearchCriteria(
         }
         if (size < 1) {
             throw new IllegalArgumentException("size must be positive");
+        }
+        if (dateFrom != null && dateTo != null && dateFrom.isAfter(dateTo)) {
+            throw new IllegalArgumentException("dateFrom must not be after dateTo");
         }
     }
 

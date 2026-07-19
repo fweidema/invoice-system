@@ -228,7 +228,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
                         invoiceRepository.search(invoiceCriteria(exchange)),
                         InvoiceResponse::from));
             } catch (IllegalArgumentException exception) {
-                writeError(exchange, HTTP_BAD_REQUEST, "BAD_REQUEST", exception.getMessage());
+                writeError(exchange, HTTP_BAD_REQUEST, "INVALID_QUERY_PARAMETER", exception.getMessage());
             }
             return;
         }
@@ -260,7 +260,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
                         processingHistoryRepository.search(historyCriteria(exchange)),
                         ProcessingHistoryResponse::from));
             } catch (IllegalArgumentException exception) {
-                writeError(exchange, HTTP_BAD_REQUEST, "BAD_REQUEST", exception.getMessage());
+                writeError(exchange, HTTP_BAD_REQUEST, "INVALID_QUERY_PARAMETER", exception.getMessage());
             }
             return;
         }
@@ -285,8 +285,8 @@ public class ReadOnlyApiServer implements AutoCloseable {
         final Map<String, String> query = queryParameters(exchange);
         return new InvoiceSearchCriteria(
                 intQuery(query, "page", 0, 0, Integer.MAX_VALUE),
-                intQuery(query, "size", 20, 1, 100),
-                whitelist(query.getOrDefault("sort", "invoiceDate"), List.of("invoiceDate", "supplier", "invoiceNumber", "grossAmount", "importedAt"), "sort"),
+                intQuery(query, "size", 25, 1, 100),
+                whitelist(query.getOrDefault("sort", "importedAt"), List.of("invoiceDate", "supplier", "invoiceNumber", "grossAmount", "importedAt"), "sort"),
                 direction(query.get("direction")),
                 textQuery(query, "q"),
                 textQuery(query, "supplier"),
@@ -299,14 +299,15 @@ public class ReadOnlyApiServer implements AutoCloseable {
         final Map<String, String> query = queryParameters(exchange);
         return new ProcessingHistorySearchCriteria(
                 intQuery(query, "page", 0, 0, Integer.MAX_VALUE),
-                intQuery(query, "size", 20, 1, 100),
-                whitelist(query.getOrDefault("sort", "finishedAt"), List.of("finishedAt", "startedAt", "status", "originalFilename", "invoiceNumber", "durationMillis"), "sort"),
+                intQuery(query, "size", 25, 1, 100),
+                whitelist(query.getOrDefault("sort", "startedAt"), List.of("finishedAt", "startedAt", "status", "originalFilename", "invoiceNumber", "durationMillis"), "sort"),
                 direction(query.get("direction")),
                 textQuery(query, "q"),
                 statusQuery(query, "status"),
-                textQuery(query, "invoiceNumber"));
+                textQuery(query, "invoiceNumber"),
+                dateQuery(query, "dateFrom"),
+                dateQuery(query, "dateTo"));
     }
-
     private Map<String, String> queryParameters(final HttpExchange exchange) {
         final Map<String, String> parameters = new HashMap<>();
         final String rawQuery = exchange.getRequestURI().getRawQuery();

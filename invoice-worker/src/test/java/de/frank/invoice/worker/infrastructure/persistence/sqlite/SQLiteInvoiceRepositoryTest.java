@@ -141,6 +141,31 @@ class SQLiteInvoiceRepositoryTest {
                 .containsExactly("INV-001");
     }
 
+
+    @Test
+    void searchEscapesLikeWildcardsInSupplierInvoiceNumberAndFilenameFilters() {
+        // Arrange
+        final SQLiteInvoiceRepository repository = repository();
+        final String literalNeedle = "100%_" + "\\";
+        final String literalInvoiceNumber = "INV%_" + "\\" + "-001";
+        final String literalFilenameNeedle = "file%_" + "\\";
+        repository.save(invoice(literalInvoiceNumber, "ACME " + literalNeedle + " GmbH", literalFilenameNeedle + ".pdf"));
+        repository.save(invoice("INVXX-001", "ACME 100XYZ GmbH", "fileXYZ.pdf"));
+
+        // Act
+        final PageResult<Invoice> supplierResult = repository.search(new InvoiceSearchCriteria(
+                0, 25, "invoiceNumber", SortDirection.ASC, null, literalNeedle, null, null, null));
+        final PageResult<Invoice> invoiceNumberResult = repository.search(new InvoiceSearchCriteria(
+                0, 25, "invoiceNumber", SortDirection.ASC, null, null, "INV%_" + "\\", null, null));
+        final PageResult<Invoice> filenameResult = repository.search(new InvoiceSearchCriteria(
+                0, 25, "invoiceNumber", SortDirection.ASC, literalFilenameNeedle, null, null, null, null));
+
+        // Assert
+        assertThat(supplierResult.items()).extracting(Invoice::invoiceNumber).containsExactly(literalInvoiceNumber);
+        assertThat(invoiceNumberResult.items()).extracting(Invoice::invoiceNumber).containsExactly(literalInvoiceNumber);
+        assertThat(filenameResult.items()).extracting(Invoice::invoiceNumber).containsExactly(literalInvoiceNumber);
+    }
+
     @Test
     void searchRejectsUnsupportedSortField() {
         // Arrange
@@ -188,6 +213,40 @@ class SQLiteInvoiceRepositoryTest {
         return new SQLiteInvoiceRepository(tempDirectory.resolve("invoice-system.db"));
     }
 
+
+    private Invoice invoice(final String invoiceNumber, final String supplierName, final String originalFilename) {
+        final Document document = new Document(
+                "document-" + invoiceNumber,
+                "input/" + originalFilename,
+                "ocr/" + originalFilename,
+                DocumentType.INVOICE,
+                originalFilename,
+                "hash-" + invoiceNumber,
+                Instant.parse("2026-06-27T10:00:00Z"));
+        final Supplier supplier = new Supplier(
+                supplierName,
+                "Street 1",
+                "12345",
+                "Berlin",
+                "DE",
+                "TAX-1",
+                "VAT-1",
+                "DE02120300000000202051");
+        return new Invoice(
+                document,
+                supplier,
+                invoiceNumber,
+                LocalDate.of(2026, 6, 27),
+                LocalDate.of(2026, 7, 27),
+                new Money(new BigDecimal("100.00"), EUR),
+                new Money(new BigDecimal("19.00"), EUR),
+                new Money(new BigDecimal("119.00"), EUR),
+                List.of(),
+                List.of(),
+                "CUSTOMER-1",
+                "ORDER-1",
+                invoiceNumber);
+    }
     private Invoice invoice(final String invoiceNumber) {
         final Document document = new Document(
                 "document-" + invoiceNumber,

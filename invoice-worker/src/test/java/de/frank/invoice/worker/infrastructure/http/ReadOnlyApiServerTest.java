@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.frank.invoice.worker.application.configuration.ApiConfiguration;
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
+import de.frank.invoice.worker.application.persistence.PageResult;
+import de.frank.invoice.worker.application.persistence.ProcessingHistorySearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
@@ -176,7 +178,7 @@ class ReadOnlyApiServerTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(items).hasSize(1);
         assertThat(body.get("totalElements").asLong()).isEqualTo(1);
-        assertThat(body.get("sort").asText()).isEqualTo("invoiceDate");
+        assertThat(body.get("sort").asText()).isEqualTo("importedAt");
         assertThat(items.get(0).get("invoiceNumber").asText()).isEqualTo("INV-001");
         assertThat(items.get(0).get("supplier").has("iban")).isFalse();
     }
@@ -229,7 +231,7 @@ class ReadOnlyApiServerTest {
         assertThat(response.statusCode()).isEqualTo(200);
         assertThat(items).hasSize(1);
         assertThat(body.get("totalElements").asLong()).isEqualTo(1);
-        assertThat(body.get("sort").asText()).isEqualTo("finishedAt");
+        assertThat(body.get("sort").asText()).isEqualTo("startedAt");
         assertThat(items.get(0).get("status").asText()).isEqualTo("SUCCESS");
         assertThat(items.get(0).has("originalPath")).isFalse();
     }
@@ -246,11 +248,77 @@ class ReadOnlyApiServerTest {
         // Assert
         final JsonNode body = json(response);
         assertThat(response.statusCode()).isEqualTo(400);
-        assertThat(body.get("error").get("code").asText()).isEqualTo("BAD_REQUEST");
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
         assertThat(response.body()).doesNotContain("SELECT");
         assertThat(response.body()).doesNotContain("Exception");
     }
 
+
+    @Test
+    void invoiceDateRangeFromAfterToReturnsInvalidQueryParameter() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/invoices?dateFrom=2026-06-28&dateTo=2026-06-27");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void processingHistoryDateRangeFromAfterToReturnsInvalidQueryParameter() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history?dateFrom=2026-06-28&dateTo=2026-06-27");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void veryLargePageReturnsInvalidQueryParameter() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/invoices?page=999999999999&size=25");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("SELECT");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void processingHistoryListParsesDateRangeAndUsesDefaults() throws Exception {
+        // Arrange
+        final CapturingProcessingHistoryRepository historyRepository = new CapturingProcessingHistoryRepository();
+        startServer(new InMemoryInvoiceRepository(), historyRepository);
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history?status=SUCCESS&dateFrom=2026-06-27&dateTo=2026-06-28");
+
+        // Assert
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(historyRepository.criteria).isNotNull();
+        assertThat(historyRepository.criteria.page()).isZero();
+        assertThat(historyRepository.criteria.size()).isEqualTo(25);
+        assertThat(historyRepository.criteria.sort()).isEqualTo("startedAt");
+        assertThat(historyRepository.criteria.status()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(historyRepository.criteria.dateFrom()).isEqualTo(LocalDate.of(2026, 6, 27));
+        assertThat(historyRepository.criteria.dateTo()).isEqualTo(LocalDate.of(2026, 6, 28));
+    }
     @Test
     void processingHistoryByDocumentIdReturnsSingleEntry() throws Exception {
         // Arrange
@@ -453,7 +521,18 @@ class ReadOnlyApiServerTest {
         }
     }
 
-    private static final class InMemoryProcessingHistoryRepository implements ProcessingHistoryRepository {
+
+    private static final class CapturingProcessingHistoryRepository extends InMemoryProcessingHistoryRepository {
+
+        private ProcessingHistorySearchCriteria criteria;
+
+        @Override
+        public PageResult<ProcessingHistoryEntry> search(final ProcessingHistorySearchCriteria criteria) {
+            this.criteria = criteria;
+            return new PageResult<>(findAll(), criteria.page(), criteria.size(), findAll().size(), criteria.sort(), criteria.direction());
+        }
+    }
+    private static class InMemoryProcessingHistoryRepository implements ProcessingHistoryRepository {
 
         private final List<ProcessingHistoryEntry> entries = new ArrayList<>();
 

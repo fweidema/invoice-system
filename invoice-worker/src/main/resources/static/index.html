@@ -57,9 +57,11 @@
                     <option>AI_FAILED</option>
                     <option>ERROR</option>
                 </select></label>
+                <label>Von <input id="history-date-from" name="dateFrom" type="date"></label>
+                <label>Bis <input id="history-date-to" name="dateTo" type="date"></label>
                 <label>Sortierung <select id="history-sort" name="sort">
-                    <option value="finishedAt">Beendet</option>
                     <option value="startedAt">Gestartet</option>
+                    <option value="finishedAt">Beendet</option>
                     <option value="status">Status</option>
                     <option value="originalFilename">Datei</option>
                     <option value="invoiceNumber">Rechnungsnummer</option>
@@ -73,7 +75,7 @@
                 <table>
                     <thead>
                     <tr>
-                        <th>Datum</th>
+                        <th>Gestartet</th>
                         <th>Datei</th>
                         <th>Status</th>
                         <th>Rechnungsnummer</th>
@@ -100,6 +102,7 @@
                 <label>Suche <input id="invoice-query" name="q" type="search" placeholder="Lieferant, Rechnung, Datei"></label>
                 <label>Lieferant <input id="invoice-supplier" name="supplier" type="search" placeholder="Name"></label>
                 <label>Sortierung <select id="invoice-sort" name="sort">
+                    <option value="importedAt">Importiert</option>
                     <option value="invoiceDate">Rechnungsdatum</option>
                     <option value="supplier">Lieferant</option>
                     <option value="invoiceNumber">Rechnungsnummer</option>

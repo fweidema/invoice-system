@@ -58,7 +58,8 @@ public interface ProcessingHistoryRepository {
     default PageResult<ProcessingHistoryEntry> search(final ProcessingHistorySearchCriteria criteria) {
         Objects.requireNonNull(criteria, "criteria must not be null");
         final List<ProcessingHistoryEntry> entries = findAll();
-        final int fromIndex = Math.min(criteria.page() * criteria.size(), entries.size());
+        final long offset = Math.multiplyExact((long) criteria.page(), (long) criteria.size());
+        final int fromIndex = offset >= entries.size() ? entries.size() : (int) offset;
         final int toIndex = Math.min(fromIndex + criteria.size(), entries.size());
         return new PageResult<>(
                 entries.subList(fromIndex, toIndex),

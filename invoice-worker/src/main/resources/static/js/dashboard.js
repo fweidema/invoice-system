@@ -2,10 +2,10 @@
     "use strict";
 
     const refreshIntervalMillis = 60000;
-    const pageSize = 20;
+    const pageSize = 25;
     const state = {
-        invoices: emptyPage("invoiceDate", "DESC"),
-        history: emptyPage("finishedAt", "DESC"),
+        invoices: emptyPage("importedAt", "DESC"),
+        history: emptyPage("startedAt", "DESC"),
         invoicePage: 0,
         historyPage: 0,
         selectedKey: null
@@ -31,6 +31,8 @@
         historyStatus: document.querySelector("#history-status"),
         historySort: document.querySelector("#history-sort"),
         historyDirection: document.querySelector("#history-direction"),
+        historyDateFrom: document.querySelector("#history-date-from"),
+        historyDateTo: document.querySelector("#history-date-to"),
         historyPrev: document.querySelector("#history-prev"),
         historyNext: document.querySelector("#history-next"),
         historyPageInfo: document.querySelector("#history-page-info"),
@@ -54,7 +56,7 @@
     });
 
     function bindControls() {
-        [elements.historyQuery, elements.historyStatus, elements.historySort, elements.historyDirection].forEach((control) => {
+        [elements.historyQuery, elements.historyStatus, elements.historySort, elements.historyDirection, elements.historyDateFrom, elements.historyDateTo].forEach((control) => {
             control.addEventListener("input", () => {
                 state.historyPage = 0;
                 void refreshHistory();
@@ -129,6 +131,8 @@
         parameters.set("direction", elements.historyDirection.value);
         append(parameters, "q", elements.historyQuery.value);
         append(parameters, "status", elements.historyStatus.value);
+        append(parameters, "dateFrom", elements.historyDateFrom.value);
+        append(parameters, "dateTo", elements.historyDateTo.value);
         return parameters.toString();
     }
 
@@ -166,7 +170,7 @@
             const row = document.createElement("tr");
             row.dataset.key = "history:" + safeText(entry.documentId);
             row.append(
-                cell(formatDateTime(entry.finishedAt || entry.startedAt)),
+                cell(formatDateTime(entry.startedAt)),
                 cell(entry.originalFilename || "-"),
                 statusCell(entry.status),
                 cell(entry.invoiceNumber || "-"),

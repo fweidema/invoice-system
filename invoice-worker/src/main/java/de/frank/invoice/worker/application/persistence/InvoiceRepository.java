@@ -44,7 +44,8 @@ public interface InvoiceRepository {
     default PageResult<Invoice> search(final InvoiceSearchCriteria criteria) {
         Objects.requireNonNull(criteria, "criteria must not be null");
         final List<Invoice> invoices = findAll();
-        final int fromIndex = Math.min(criteria.page() * criteria.size(), invoices.size());
+        final long offset = Math.multiplyExact((long) criteria.page(), (long) criteria.size());
+        final int fromIndex = offset >= invoices.size() ? invoices.size() : (int) offset;
         final int toIndex = Math.min(fromIndex + criteria.size(), invoices.size());
         return new PageResult<>(
                 invoices.subList(fromIndex, toIndex),
