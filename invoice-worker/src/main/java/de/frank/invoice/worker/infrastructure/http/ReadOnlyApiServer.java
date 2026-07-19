@@ -6,9 +6,14 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import de.frank.invoice.worker.application.configuration.ApiConfiguration;
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
+import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
+import de.frank.invoice.worker.application.persistence.ProcessingHistorySearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
+import de.frank.invoice.worker.application.persistence.SortDirection;
 import de.frank.invoice.worker.cli.InvoiceWorkerCli;
 import de.frank.invoice.worker.domain.invoice.Invoice;
+import de.frank.invoice.worker.domain.processing.ProcessingHistoryEntry;
+import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -18,6 +23,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
+import java.time.LocalDate;
+import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +48,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
     private static final String PATH_INVOICES = "/api/invoices";
     private static final String PATH_HISTORY = "/api/processing-history";
     private static final int HTTP_OK = 200;
+    private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_NOT_FOUND = 404;
     private static final int HTTP_METHOD_NOT_ALLOWED = 405;
     private static final int HTTP_INTERNAL_ERROR = 500;
@@ -215,10 +223,13 @@ public class ReadOnlyApiServer implements AutoCloseable {
         }
         final String path = exchange.getRequestURI().getPath();
         if (PATH_INVOICES.equals(path)) {
-            final List<InvoiceResponse> invoices = invoiceRepository.findAll().stream()
-                    .map(InvoiceResponse::from)
-                    .toList();
-            writeJson(exchange, HTTP_OK, invoices);
+            try {
+                writeJson(exchange, HTTP_OK, PageResponse.from(
+                        invoiceRepository.search(invoiceCriteria(exchange)),
+                        InvoiceResponse::from));
+            } catch (IllegalArgumentException exception) {
+                writeError(exchange, HTTP_BAD_REQUEST, "INVALID_QUERY_PARAMETER", exception.getMessage());
+            }
             return;
         }
         if (path.startsWith(PATH_INVOICES + "/")) {
@@ -242,14 +253,142 @@ public class ReadOnlyApiServer implements AutoCloseable {
         if (!ensureGet(exchange)) {
             return;
         }
-        if (!PATH_HISTORY.equals(exchange.getRequestURI().getPath())) {
-            writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+        final String path = exchange.getRequestURI().getPath();
+        if (PATH_HISTORY.equals(path)) {
+            try {
+                writeJson(exchange, HTTP_OK, PageResponse.from(
+                        processingHistoryRepository.search(historyCriteria(exchange)),
+                        ProcessingHistoryResponse::from));
+            } catch (IllegalArgumentException exception) {
+                writeError(exchange, HTTP_BAD_REQUEST, "INVALID_QUERY_PARAMETER", exception.getMessage());
+            }
             return;
         }
-        final List<ProcessingHistoryResponse> entries = processingHistoryRepository.findAll().stream()
-                .map(ProcessingHistoryResponse::from)
-                .toList();
-        writeJson(exchange, HTTP_OK, entries);
+        if (path.startsWith(PATH_HISTORY + "/")) {
+            final String documentId = decode(path.substring((PATH_HISTORY + "/").length()));
+            if (documentId.isBlank() || documentId.contains("/")) {
+                writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+                return;
+            }
+            final ProcessingHistoryEntry entry = processingHistoryRepository.findByDocumentId(documentId).orElse(null);
+            if (entry == null) {
+                writeError(exchange, HTTP_NOT_FOUND, "PROCESSING_HISTORY_NOT_FOUND", "Processing history entry not found.");
+                return;
+            }
+            writeJson(exchange, HTTP_OK, ProcessingHistoryResponse.from(entry));
+            return;
+        }
+        writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+    }
+
+    private InvoiceSearchCriteria invoiceCriteria(final HttpExchange exchange) {
+        final Map<String, String> query = queryParameters(exchange);
+        return new InvoiceSearchCriteria(
+                intQuery(query, "page", 0, 0, Integer.MAX_VALUE),
+                intQuery(query, "size", 25, 1, 100),
+                whitelist(query.getOrDefault("sort", "importedAt"), List.of("invoiceDate", "supplier", "invoiceNumber", "grossAmount", "importedAt"), "sort"),
+                direction(query.get("direction")),
+                textQuery(query, "q"),
+                textQuery(query, "supplier"),
+                textQuery(query, "invoiceNumber"),
+                dateQuery(query, "dateFrom"),
+                dateQuery(query, "dateTo"));
+    }
+
+    private ProcessingHistorySearchCriteria historyCriteria(final HttpExchange exchange) {
+        final Map<String, String> query = queryParameters(exchange);
+        return new ProcessingHistorySearchCriteria(
+                intQuery(query, "page", 0, 0, Integer.MAX_VALUE),
+                intQuery(query, "size", 25, 1, 100),
+                whitelist(query.getOrDefault("sort", "startedAt"), List.of("finishedAt", "startedAt", "status", "originalFilename", "invoiceNumber", "durationMillis"), "sort"),
+                direction(query.get("direction")),
+                textQuery(query, "q"),
+                statusQuery(query, "status"),
+                textQuery(query, "invoiceNumber"),
+                dateQuery(query, "dateFrom"),
+                dateQuery(query, "dateTo"));
+    }
+    private Map<String, String> queryParameters(final HttpExchange exchange) {
+        final Map<String, String> parameters = new HashMap<>();
+        final String rawQuery = exchange.getRequestURI().getRawQuery();
+        if (rawQuery == null || rawQuery.isBlank()) {
+            return parameters;
+        }
+        for (final String pair : rawQuery.split("&")) {
+            final int separatorIndex = pair.indexOf('=');
+            final String rawName = separatorIndex < 0 ? pair : pair.substring(0, separatorIndex);
+            final String rawValue = separatorIndex < 0 ? "" : pair.substring(separatorIndex + 1);
+            parameters.put(decode(rawName), decode(rawValue));
+        }
+        return parameters;
+    }
+
+    private int intQuery(
+            final Map<String, String> query,
+            final String name,
+            final int defaultValue,
+            final int minValue,
+            final int maxValue) {
+        final String value = query.get(name);
+        if (value == null || value.isBlank()) {
+            return defaultValue;
+        }
+        try {
+            final int parsed = Integer.parseInt(value);
+            if (parsed < minValue || parsed > maxValue) {
+                throw new IllegalArgumentException("Invalid query parameter: " + name);
+            }
+            return parsed;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Invalid query parameter: " + name, exception);
+        }
+    }
+
+    private SortDirection direction(final String value) {
+        if (value == null || value.isBlank()) {
+            return SortDirection.DESC;
+        }
+        try {
+            return SortDirection.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Invalid query parameter: direction", exception);
+        }
+    }
+
+    private String whitelist(final String value, final List<String> allowedValues, final String name) {
+        if (allowedValues.contains(value)) {
+            return value;
+        }
+        throw new IllegalArgumentException("Invalid query parameter: " + name);
+    }
+
+    private String textQuery(final Map<String, String> query, final String name) {
+        final String value = query.get(name);
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private LocalDate dateQuery(final Map<String, String> query, final String name) {
+        final String value = query.get(name);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return LocalDate.parse(value.trim());
+        } catch (DateTimeParseException exception) {
+            throw new IllegalArgumentException("Invalid query parameter: " + name, exception);
+        }
+    }
+
+    private ProcessingStatus statusQuery(final Map<String, String> query, final String name) {
+        final String value = query.get(name);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return ProcessingStatus.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException exception) {
+            throw new IllegalArgumentException("Invalid query parameter: " + name, exception);
+        }
     }
 
     private boolean ensureGet(final HttpExchange exchange) throws IOException {

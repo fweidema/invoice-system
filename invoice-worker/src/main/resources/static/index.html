@@ -46,21 +46,61 @@
                 <h2>Letzte Verarbeitungen</h2>
                 <span id="history-updated" class="muted">Noch nicht aktualisiert</span>
             </div>
+            <form class="filter-bar" id="history-filters">
+                <label>Suche <input id="history-query" name="q" type="search" placeholder="Datei, Dokument, Rechnung"></label>
+                <label>Status <select id="history-status" name="status">
+                    <option value="">Alle</option>
+                    <option>SUCCESS</option>
+                    <option>DUPLICATE</option>
+                    <option>VALIDATION_FAILED</option>
+                    <option>OCR_FAILED</option>
+                    <option>AI_FAILED</option>
+                    <option>ERROR</option>
+                </select></label>
+                <label>Von <input id="history-date-from" name="dateFrom" type="date"></label>
+                <label>Bis <input id="history-date-to" name="dateTo" type="date"></label>
+                <label>Seitengroesse <select id="history-size" name="size">
+                    <option>10</option>
+                    <option selected>25</option>
+                    <option>50</option>
+                    <option>100</option>
+                </select></label>
+                <label>Sortierung <select id="history-sort" name="sort">
+                    <option value="startedAt">Gestartet</option>
+                    <option value="finishedAt">Beendet</option>
+                    <option value="status">Status</option>
+                    <option value="originalFilename">Datei</option>
+                    <option value="invoiceNumber">Rechnungsnummer</option>
+                </select></label>
+                <label>Richtung <select id="history-direction" name="direction">
+                    <option value="DESC">Absteigend</option>
+                    <option value="ASC">Aufsteigend</option>
+                </select></label>
+                <button id="history-apply" type="submit">Filter anwenden</button>
+                <button id="history-reset" type="button">Zuruecksetzen</button>
+            </form>
             <div class="table-wrap">
                 <table>
                     <thead>
                     <tr>
-                        <th>Datum</th>
+                        <th>Gestartet</th>
                         <th>Datei</th>
                         <th>Status</th>
-                        <th>Vendor</th>
-                        <th>Betrag</th>
+                        <th>Rechnungsnummer</th>
+                        <th>Dauer</th>
                     </tr>
                     </thead>
                     <tbody id="history-table"></tbody>
                 </table>
                 <p id="history-empty" class="empty-state" hidden>Keine Verarbeitungseintraege vorhanden.</p>
             </div>
+            <nav class="pagination" aria-label="Verarbeitungseintraege Seiten">
+                <button id="history-first" type="button">Erste</button>
+                <button id="history-prev" type="button">Zurueck</button>
+                <span id="history-page-info">Seite 0 von 0</span>
+                <button id="history-next" type="button">Weiter</button>
+                <button id="history-last" type="button">Letzte</button>
+            </nav>
         </section>
 
         <section class="data-section">
@@ -68,6 +108,32 @@
                 <h2>Rechnungen</h2>
                 <span id="invoice-updated" class="muted">Noch nicht aktualisiert</span>
             </div>
+            <form class="filter-bar" id="invoice-filters">
+                <label>Suche <input id="invoice-query" name="q" type="search" placeholder="Lieferant, Rechnung, Datei"></label>
+                <label>Lieferant <input id="invoice-supplier" name="supplier" type="search" placeholder="Name"></label>
+                <label>Rechnungsnummer <input id="invoice-number" name="invoiceNumber" type="search" placeholder="Nummer"></label>
+                <label>Von <input id="invoice-date-from" name="dateFrom" type="date"></label>
+                <label>Bis <input id="invoice-date-to" name="dateTo" type="date"></label>
+                <label>Seitengroesse <select id="invoice-size" name="size">
+                    <option>10</option>
+                    <option selected>25</option>
+                    <option>50</option>
+                    <option>100</option>
+                </select></label>
+                <label>Sortierung <select id="invoice-sort" name="sort">
+                    <option value="importedAt">Importiert</option>
+                    <option value="invoiceDate">Rechnungsdatum</option>
+                    <option value="supplier">Lieferant</option>
+                    <option value="invoiceNumber">Rechnungsnummer</option>
+                    <option value="grossAmount">Betrag</option>
+                </select></label>
+                <label>Richtung <select id="invoice-direction" name="direction">
+                    <option value="DESC">Absteigend</option>
+                    <option value="ASC">Aufsteigend</option>
+                </select></label>
+                <button id="invoice-apply" type="submit">Filter anwenden</button>
+                <button id="invoice-reset" type="button">Zuruecksetzen</button>
+            </form>
             <div class="table-wrap">
                 <table>
                     <thead>
@@ -83,6 +149,13 @@
                 </table>
                 <p id="invoice-empty" class="empty-state" hidden>Keine Rechnungen vorhanden.</p>
             </div>
+            <nav class="pagination" aria-label="Rechnungen Seiten">
+                <button id="invoice-first" type="button">Erste</button>
+                <button id="invoice-prev" type="button">Zurueck</button>
+                <span id="invoice-page-info">Seite 0 von 0</span>
+                <button id="invoice-next" type="button">Weiter</button>
+                <button id="invoice-last" type="button">Letzte</button>
+            </nav>
         </section>
     </div>
 

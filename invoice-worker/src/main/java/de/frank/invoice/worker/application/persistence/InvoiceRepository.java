@@ -5,6 +5,7 @@ import de.frank.invoice.worker.domain.invoice.Invoice;
 import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 /**
@@ -33,6 +34,27 @@ public interface InvoiceRepository {
      * @return stored invoices
      */
     List<Invoice> findAll();
+
+    /**
+     * Searches invoices with pagination, filtering and sorting.
+     *
+     * @param criteria search criteria
+     * @return matching page
+     */
+    default PageResult<Invoice> search(final InvoiceSearchCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria must not be null");
+        final List<Invoice> invoices = findAll();
+        final long offset = Math.multiplyExact((long) criteria.page(), (long) criteria.size());
+        final int fromIndex = offset >= invoices.size() ? invoices.size() : (int) offset;
+        final int toIndex = Math.min(fromIndex + criteria.size(), invoices.size());
+        return new PageResult<>(
+                invoices.subList(fromIndex, toIndex),
+                criteria.page(),
+                criteria.size(),
+                invoices.size(),
+                criteria.sort(),
+                criteria.direction());
+    }
 
     /**
      * Checks whether an invoice number already exists.

@@ -1,6 +1,9 @@
 package de.frank.invoice.worker.infrastructure.persistence.sqlite;
 
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
+import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
+import de.frank.invoice.worker.application.persistence.PageResult;
+import de.frank.invoice.worker.application.persistence.SortDirection;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.invoice.Invoice;
@@ -28,6 +31,8 @@ import java.util.Optional;
  * SQLite-backed implementation of the invoice repository port.
  */
 public class SQLiteInvoiceRepository implements InvoiceRepository {
+
+    private static final String LIKE_ESCAPE_CLAUSE = " ESCAPE '\\'";
 
     private static final String CREATE_INVOICES_TABLE = """
             CREATE TABLE IF NOT EXISTS invoices (
@@ -64,6 +69,16 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
     private static final String CREATE_INVOICE_NUMBER_INDEX = """
             CREATE UNIQUE INDEX IF NOT EXISTS idx_invoices_invoice_number
             ON invoices(invoice_number)
+            """;
+
+    private static final String CREATE_INVOICE_DATE_INDEX = """
+            CREATE INDEX IF NOT EXISTS idx_invoices_invoice_date
+            ON invoices(invoice_date)
+            """;
+
+    private static final String CREATE_SUPPLIER_INDEX = """
+            CREATE INDEX IF NOT EXISTS idx_invoices_supplier_name
+            ON invoices(supplier_name)
             """;
 
     private static final String ADD_FILE_HASH_COLUMN = """
@@ -110,6 +125,9 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             SELECT * FROM invoices
             ORDER BY id
             """;
+
+    private static final String COUNT_INVOICES_PREFIX = "SELECT COUNT(*) FROM invoices";
+    private static final String SEARCH_INVOICES_PREFIX = "SELECT * FROM invoices";
 
     private static final String EXISTS_BY_INVOICE_NUMBER = """
             SELECT 1 FROM invoices
@@ -215,6 +233,39 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
     }
 
     /**
+     * Searches invoices in SQLite.
+     *
+     * @param criteria search criteria
+     * @return matching page
+     */
+    @Override
+    public PageResult<Invoice> search(final InvoiceSearchCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria must not be null");
+        final List<Object> parameters = new ArrayList<>();
+        final String whereClause = invoiceWhereClause(criteria, parameters);
+        final long totalElements = count(COUNT_INVOICES_PREFIX + whereClause, parameters, "Could not count invoices");
+        final String sql = SEARCH_INVOICES_PREFIX
+                + whereClause
+                + invoiceOrderBy(criteria)
+                + " LIMIT ? OFFSET ?";
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            int parameterIndex = bindParameters(statement, parameters, 1);
+            statement.setInt(parameterIndex++, criteria.size());
+            statement.setLong(parameterIndex, offset(criteria.page(), criteria.size()));
+            try (ResultSet resultSet = statement.executeQuery()) {
+                final List<Invoice> invoices = new ArrayList<>();
+                while (resultSet.next()) {
+                    invoices.add(mapInvoice(resultSet));
+                }
+                return new PageResult<>(invoices, criteria.page(), criteria.size(), totalElements, criteria.sort(), criteria.direction());
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not search invoices", exception);
+        }
+    }
+
+    /**
      * Checks whether an invoice number exists.
      *
      * @param invoiceNumber invoice number
@@ -285,6 +336,8 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
                 statement.execute(CREATE_INVOICES_TABLE);
                 ensureFileHashColumn(connection);
                 statement.execute(CREATE_INVOICE_NUMBER_INDEX);
+                statement.execute(CREATE_INVOICE_DATE_INDEX);
+                statement.execute(CREATE_SUPPLIER_INDEX);
             }
         } catch (Exception exception) {
             throw new PersistenceException("Could not initialize SQLite database: " + databasePath, exception);
@@ -293,6 +346,90 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
 
     private Connection openConnection() throws SQLException {
         return DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath().normalize());
+    }
+
+    private String invoiceWhereClause(final InvoiceSearchCriteria criteria, final List<Object> parameters) {
+        final List<String> conditions = new ArrayList<>();
+        if (criteria.query() != null) {
+            conditions.add("(LOWER(invoice_number) LIKE ?" + LIKE_ESCAPE_CLAUSE
+                    + " OR LOWER(supplier_name) LIKE ?" + LIKE_ESCAPE_CLAUSE
+                    + " OR LOWER(original_filename) LIKE ?" + LIKE_ESCAPE_CLAUSE + ")");
+            final String query = like(criteria.query());
+            parameters.add(query);
+            parameters.add(query);
+            parameters.add(query);
+        }
+        if (criteria.supplier() != null) {
+            conditions.add("LOWER(supplier_name) LIKE ?" + LIKE_ESCAPE_CLAUSE);
+            parameters.add(like(criteria.supplier()));
+        }
+        if (criteria.invoiceNumber() != null) {
+            conditions.add("LOWER(invoice_number) LIKE ?" + LIKE_ESCAPE_CLAUSE);
+            parameters.add(like(criteria.invoiceNumber()));
+        }
+        if (criteria.dateFrom() != null) {
+            conditions.add("invoice_date >= ?");
+            parameters.add(criteria.dateFrom().toString());
+        }
+        if (criteria.dateTo() != null) {
+            conditions.add("invoice_date <= ?");
+            parameters.add(criteria.dateTo().toString());
+        }
+        if (conditions.isEmpty()) {
+            return "";
+        }
+        return " WHERE " + String.join(" AND ", conditions);
+    }
+
+    private String invoiceOrderBy(final InvoiceSearchCriteria criteria) {
+        final String column = switch (criteria.sort()) {
+            case "invoiceDate" -> "invoice_date";
+            case "supplier" -> "supplier_name";
+            case "invoiceNumber" -> "invoice_number";
+            case "grossAmount" -> "CAST(gross_amount AS REAL)";
+            case "importedAt" -> "imported_at";
+            default -> throw new IllegalArgumentException("Unsupported invoice sort field: " + criteria.sort());
+        };
+        final String direction = criteria.direction() == SortDirection.ASC ? " ASC" : " DESC";
+        return " ORDER BY " + column + direction + ", id" + direction;
+    }
+
+    private long count(final String sql, final List<Object> parameters, final String failureMessage) {
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            bindParameters(statement, parameters, 1);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? resultSet.getLong(1) : 0;
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException(failureMessage, exception);
+        }
+    }
+
+    private int bindParameters(
+            final PreparedStatement statement,
+            final List<Object> parameters,
+            final int startIndex) throws SQLException {
+        int parameterIndex = startIndex;
+        for (final Object parameter : parameters) {
+            statement.setObject(parameterIndex++, parameter);
+        }
+        return parameterIndex;
+    }
+
+    private long offset(final int page, final int size) {
+        return Math.multiplyExact((long) page, (long) size);
+    }
+
+    private String like(final String value) {
+        return "%" + escapeLike(value.toLowerCase()) + "%";
+    }
+
+    private String escapeLike(final String value) {
+        return value
+                .replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
     }
 
     private boolean existsBySingleValue(

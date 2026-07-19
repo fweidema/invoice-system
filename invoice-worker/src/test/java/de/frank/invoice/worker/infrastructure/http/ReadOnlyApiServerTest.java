@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import de.frank.invoice.worker.application.configuration.ApiConfiguration;
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
+import de.frank.invoice.worker.application.persistence.PageResult;
+import de.frank.invoice.worker.application.persistence.ProcessingHistorySearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
@@ -61,6 +63,22 @@ class ReadOnlyApiServerTest {
         assertThat(response.body()).contains("Invoice Monitoring");
         assertThat(response.body()).contains("/css/dashboard.css");
         assertThat(response.body()).contains("/js/dashboard.js");
+        assertThat(response.body()).contains("invoice-number");
+        assertThat(response.body()).contains("invoice-date-from");
+        assertThat(response.body()).contains("invoice-date-to");
+        assertThat(response.body()).contains("invoice-size");
+        assertThat(response.body()).contains("history-size");
+        assertThat(response.body()).contains("<option>10</option>");
+        assertThat(response.body()).contains("<option selected>25</option>");
+        assertThat(response.body()).contains("<option>50</option>");
+        assertThat(response.body()).contains("<option>100</option>");
+        assertThat(response.body()).contains("invoice-first");
+        assertThat(response.body()).contains("invoice-last");
+        assertThat(response.body()).contains("history-first");
+        assertThat(response.body()).contains("history-last");
+        assertThat(response.body()).contains("Seite 0 von 0");
+        assertThat(response.body()).contains("Filter anwenden");
+        assertThat(response.body()).contains("Zuruecksetzen");
     }
 
     @Test
@@ -93,9 +111,46 @@ class ReadOnlyApiServerTest {
         assertThat(javascript.statusCode()).isEqualTo(200);
         assertThat(contentType(javascript)).contains("application/javascript");
         assertThat(javascript.body()).contains("/api/invoices");
+        assertThat(javascript.body()).contains("append(parameters, \"invoiceNumber\", elements.invoiceNumber.value)");
+        assertThat(javascript.body()).contains("append(parameters, \"dateFrom\", elements.invoiceDateFrom.value)");
+        assertThat(javascript.body()).contains("append(parameters, \"dateTo\", elements.invoiceDateTo.value)");
+        assertThat(javascript.body()).contains("const defaultPageSize = 25");
+        assertThat(javascript.body()).contains("Promise.allSettled([refreshInvoices(), refreshHistory()])");
+        assertThat(javascript.body()).contains("Seite 0 von 0");
+        assertThat(javascript.body()).contains("historyFirst");
+        assertThat(javascript.body()).contains("historyLast");
+        assertThat(javascript.body()).contains("invoiceFirst");
+        assertThat(javascript.body()).contains("invoiceLast");
+        assertThat(javascript.body()).contains("resetInvoiceFilters");
+        assertThat(javascript.body()).contains("resetHistoryFilters");
+        assertThat(javascript.body()).contains("shouldReloadPage");
+        assertThat(javascript.body()).contains("return refreshInvoices(true)");
+        assertThat(javascript.body()).contains("return refreshHistory(true)");
+        assertThat(javascript.body()).contains("/api/processing-history/");
+        assertThat(javascript.body()).doesNotContain("addEventListener(\"input\"");
         assertThat(javascript.body()).doesNotContain("cell(\"Verarbeitung\")");
     }
 
+    @Test
+    void dashboardJavascriptResetsCurrentPageWhenApiReturnsEmptyPage() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> javascript = get("/js/dashboard.js");
+
+        // Assert
+        final String body = javascript.body();
+        assertThat(javascript.statusCode()).isEqualTo(200);
+        assertThat(body).contains("resetPageWhenEmpty(page, () => { state.invoicePage = 0; });");
+        assertThat(body).contains("resetPageWhenEmpty(page, () => { state.historyPage = 0; });");
+        assertThat(body).contains("if ((page.totalPages || 0) === 0)");
+        assertThat(body).contains("return !retried && totalPages > 0 && currentPage >= totalPages;");
+        assertThat(body.indexOf("resetPageWhenEmpty(page, () => { state.invoicePage = 0; });"))
+                .isLessThan(body.indexOf("if (shouldReloadPage(state.invoicePage, page.totalPages, retried))"));
+        assertThat(body.indexOf("resetPageWhenEmpty(page, () => { state.historyPage = 0; });"))
+                .isLessThan(body.indexOf("if (shouldReloadPage(state.historyPage, page.totalPages, retried))"));
+    }
     @Test
     void unknownStaticResourceReturnsJsonNotFound() throws Exception {
         // Arrange
@@ -141,11 +196,12 @@ class ReadOnlyApiServerTest {
         // Assert
         assertThat(invoices.statusCode()).isEqualTo(200);
         assertThat(contentType(invoices)).contains("application/json");
-        assertThat(json(invoices)).hasSize(1);
+        assertThat(json(invoices).get("items")).hasSize(1);
         assertThat(history.statusCode()).isEqualTo(200);
         assertThat(contentType(history)).contains("application/json");
-        assertThat(json(history)).hasSize(1);
+        assertThat(json(history).get("items")).hasSize(1);
     }
+
     @Test
     void healthReturnsSystemStatus() throws Exception {
         // Arrange
@@ -171,10 +227,13 @@ class ReadOnlyApiServerTest {
 
         // Assert
         final JsonNode body = json(response);
+        final JsonNode items = body.get("items");
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(body).hasSize(1);
-        assertThat(body.get(0).get("invoiceNumber").asText()).isEqualTo("INV-001");
-        assertThat(body.get(0).get("supplier").has("iban")).isFalse();
+        assertThat(items).hasSize(1);
+        assertThat(body.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(body.get("sort").asText()).isEqualTo("importedAt");
+        assertThat(items.get(0).get("invoiceNumber").asText()).isEqualTo("INV-001");
+        assertThat(items.get(0).get("supplier").has("iban")).isFalse();
     }
 
     @Test
@@ -221,10 +280,129 @@ class ReadOnlyApiServerTest {
 
         // Assert
         final JsonNode body = json(response);
+        final JsonNode items = body.get("items");
         assertThat(response.statusCode()).isEqualTo(200);
-        assertThat(body).hasSize(1);
-        assertThat(body.get(0).get("status").asText()).isEqualTo("SUCCESS");
-        assertThat(body.get(0).has("originalPath")).isFalse();
+        assertThat(items).hasSize(1);
+        assertThat(body.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(body.get("sort").asText()).isEqualTo("startedAt");
+        assertThat(items.get(0).get("status").asText()).isEqualTo("SUCCESS");
+        assertThat(items.get(0).has("originalPath")).isFalse();
+    }
+
+
+    @Test
+    void invalidListQueryReturnsUniformBadRequestWithoutInternals() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/invoices?sort=invoice_date%20DESC");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("SELECT");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+
+    @Test
+    void invoiceDateRangeFromAfterToReturnsInvalidQueryParameter() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/invoices?dateFrom=2026-06-28&dateTo=2026-06-27");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void processingHistoryDateRangeFromAfterToReturnsInvalidQueryParameter() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history?dateFrom=2026-06-28&dateTo=2026-06-27");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void veryLargePageReturnsInvalidQueryParameter() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/invoices?page=999999999999&size=25");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(400);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("INVALID_QUERY_PARAMETER");
+        assertThat(response.body()).doesNotContain("SELECT");
+        assertThat(response.body()).doesNotContain("Exception");
+    }
+
+    @Test
+    void processingHistoryListParsesDateRangeAndUsesDefaults() throws Exception {
+        // Arrange
+        final CapturingProcessingHistoryRepository historyRepository = new CapturingProcessingHistoryRepository();
+        startServer(new InMemoryInvoiceRepository(), historyRepository);
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history?status=SUCCESS&dateFrom=2026-06-27&dateTo=2026-06-28");
+
+        // Assert
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(historyRepository.criteria).isNotNull();
+        assertThat(historyRepository.criteria.page()).isZero();
+        assertThat(historyRepository.criteria.size()).isEqualTo(25);
+        assertThat(historyRepository.criteria.sort()).isEqualTo("startedAt");
+        assertThat(historyRepository.criteria.status()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(historyRepository.criteria.dateFrom()).isEqualTo(LocalDate.of(2026, 6, 27));
+        assertThat(historyRepository.criteria.dateTo()).isEqualTo(LocalDate.of(2026, 6, 28));
+    }
+    @Test
+    void processingHistoryByDocumentIdReturnsSingleEntry() throws Exception {
+        // Arrange
+        final InMemoryProcessingHistoryRepository historyRepository = new InMemoryProcessingHistoryRepository();
+        historyRepository.save(historyEntry());
+        startServer(new InMemoryInvoiceRepository(), historyRepository);
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history/" + encode("document-1"));
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(body.get("documentId").asText()).isEqualTo("document-1");
+        assertThat(body.get("status").asText()).isEqualTo("SUCCESS");
+        assertThat(body.has("originalPath")).isFalse();
+    }
+
+    @Test
+    void missingProcessingHistoryByDocumentIdReturnsUniformJsonError() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> response = get("/api/processing-history/MISSING");
+
+        // Assert
+        final JsonNode body = json(response);
+        assertThat(response.statusCode()).isEqualTo(404);
+        assertThat(body.get("error").get("code").asText()).isEqualTo("PROCESSING_HISTORY_NOT_FOUND");
+        assertThat(response.body()).doesNotContain("Exception");
     }
 
     @Test
@@ -396,7 +574,18 @@ class ReadOnlyApiServerTest {
         }
     }
 
-    private static final class InMemoryProcessingHistoryRepository implements ProcessingHistoryRepository {
+
+    private static final class CapturingProcessingHistoryRepository extends InMemoryProcessingHistoryRepository {
+
+        private ProcessingHistorySearchCriteria criteria;
+
+        @Override
+        public PageResult<ProcessingHistoryEntry> search(final ProcessingHistorySearchCriteria criteria) {
+            this.criteria = criteria;
+            return new PageResult<>(findAll(), criteria.page(), criteria.size(), findAll().size(), criteria.sort(), criteria.direction());
+        }
+    }
+    private static class InMemoryProcessingHistoryRepository implements ProcessingHistoryRepository {
 
         private final List<ProcessingHistoryEntry> entries = new ArrayList<>();
 
