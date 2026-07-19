@@ -131,6 +131,7 @@
 
     async function refreshInvoices(retried = false) {
         const page = await fetchJson("/api/invoices?" + invoiceQueryString());
+        resetPageWhenEmpty(page, () => { state.invoicePage = 0; });
         if (shouldReloadPage(state.invoicePage, page.totalPages, retried)) {
             state.invoicePage = correctedPage(page.totalPages);
             return refreshInvoices(true);
@@ -144,6 +145,7 @@
 
     async function refreshHistory(retried = false) {
         const page = await fetchJson("/api/processing-history?" + historyQueryString());
+        resetPageWhenEmpty(page, () => { state.historyPage = 0; });
         if (shouldReloadPage(state.historyPage, page.totalPages, retried)) {
             state.historyPage = correctedPage(page.totalPages);
             return refreshHistory(true);
@@ -261,6 +263,12 @@
 
     function shouldReloadPage(currentPage, totalPages, retried) {
         return !retried && totalPages > 0 && currentPage >= totalPages;
+    }
+
+    function resetPageWhenEmpty(page, reset) {
+        if ((page.totalPages || 0) === 0) {
+            reset();
+        }
     }
 
     function correctedPage(totalPages) {

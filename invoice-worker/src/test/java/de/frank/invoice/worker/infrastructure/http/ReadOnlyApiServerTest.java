@@ -132,6 +132,26 @@ class ReadOnlyApiServerTest {
     }
 
     @Test
+    void dashboardJavascriptResetsCurrentPageWhenApiReturnsEmptyPage() throws Exception {
+        // Arrange
+        startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
+
+        // Act
+        final HttpResponse<String> javascript = get("/js/dashboard.js");
+
+        // Assert
+        final String body = javascript.body();
+        assertThat(javascript.statusCode()).isEqualTo(200);
+        assertThat(body).contains("resetPageWhenEmpty(page, () => { state.invoicePage = 0; });");
+        assertThat(body).contains("resetPageWhenEmpty(page, () => { state.historyPage = 0; });");
+        assertThat(body).contains("if ((page.totalPages || 0) === 0)");
+        assertThat(body).contains("return !retried && totalPages > 0 && currentPage >= totalPages;");
+        assertThat(body.indexOf("resetPageWhenEmpty(page, () => { state.invoicePage = 0; });"))
+                .isLessThan(body.indexOf("if (shouldReloadPage(state.invoicePage, page.totalPages, retried))"));
+        assertThat(body.indexOf("resetPageWhenEmpty(page, () => { state.historyPage = 0; });"))
+                .isLessThan(body.indexOf("if (shouldReloadPage(state.historyPage, page.totalPages, retried))"));
+    }
+    @Test
     void unknownStaticResourceReturnsJsonNotFound() throws Exception {
         // Arrange
         startServer(new InMemoryInvoiceRepository(), new InMemoryProcessingHistoryRepository());
