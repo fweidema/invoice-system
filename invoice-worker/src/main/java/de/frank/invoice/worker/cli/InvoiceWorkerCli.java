@@ -113,6 +113,7 @@ public class InvoiceWorkerCli {
         return switch (parsedOptions.command()) {
             case PROCESS -> runProcess(parsedOptions);
             case WATCH -> runWatch(parsedOptions);
+            case SERVE -> runServe();
         };
     }
 
@@ -134,6 +135,11 @@ public class InvoiceWorkerCli {
      */
     public static boolean mockTextRequested(final String[] args) {
         return CliOptions.mockTextRequested(args);
+    }
+
+    private int runServe() {
+        err.println("API server is not configured.");
+        return EXIT_ERROR;
     }
 
     private int runProcess(final CliOptions parsedOptions) {

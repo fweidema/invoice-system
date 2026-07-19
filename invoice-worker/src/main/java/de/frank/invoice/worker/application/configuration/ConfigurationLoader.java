@@ -29,6 +29,9 @@ public class ConfigurationLoader {
     public static final String WATCH_MAX_WAIT_TIME = "watch.maxWaitTime";
     public static final String WATCH_SHUTDOWN_TIMEOUT = "watch.shutdownTimeout";
     public static final String WATCH_PROCESS_EXISTING = "watch.processExistingFilesOnStartup";
+    public static final String API_HOST = "api.host";
+    public static final String API_PORT = "api.port";
+    public static final String API_SHUTDOWN_TIMEOUT = "api.shutdownTimeout";
     public static final String LOGGING_LEVEL = "logging.level";
 
     private static final Map<String, String> ENVIRONMENT_MAPPING = Map.ofEntries(
@@ -44,6 +47,9 @@ public class ConfigurationLoader {
             Map.entry("INVOICE_WATCH_MAX_WAIT_TIME", WATCH_MAX_WAIT_TIME),
             Map.entry("INVOICE_WATCH_SHUTDOWN_TIMEOUT", WATCH_SHUTDOWN_TIMEOUT),
             Map.entry("INVOICE_WATCH_PROCESS_EXISTING", WATCH_PROCESS_EXISTING),
+            Map.entry("INVOICE_API_HOST", API_HOST),
+            Map.entry("INVOICE_API_PORT", API_PORT),
+            Map.entry("INVOICE_API_SHUTDOWN_TIMEOUT", API_SHUTDOWN_TIMEOUT),
             Map.entry("INVOICE_OCR_COMMAND", OCR_COMMAND),
             Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
             Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
@@ -152,6 +158,9 @@ public class ConfigurationLoader {
         properties.setProperty(WATCH_MAX_WAIT_TIME, "5m");
         properties.setProperty(WATCH_SHUTDOWN_TIMEOUT, "10s");
         properties.setProperty(WATCH_PROCESS_EXISTING, "true");
+        properties.setProperty(API_HOST, "127.0.0.1");
+        properties.setProperty(API_PORT, "8080");
+        properties.setProperty(API_SHUTDOWN_TIMEOUT, "10s");
         properties.setProperty(LOGGING_LEVEL, LoggingConfiguration.DEFAULT_LEVEL);
         return properties;
     }
@@ -164,6 +173,7 @@ public class ConfigurationLoader {
                 ai(properties),
                 batch(properties),
                 watch(properties),
+                api(properties),
                 logging(properties));
     }
 
@@ -215,6 +225,14 @@ public class ConfigurationLoader {
                 bool(properties, WATCH_PROCESS_EXISTING));
     }
 
+    private ApiConfiguration api(final Properties properties) {
+        final DurationParser durationParser = new DurationParser();
+        return new ApiConfiguration(
+                text(properties, API_HOST),
+                port(properties, API_PORT),
+                durationParser.parse(text(properties, API_SHUTDOWN_TIMEOUT), API_SHUTDOWN_TIMEOUT));
+    }
+
     private LoggingConfiguration logging(final Properties properties) {
         return new LoggingConfiguration(text(properties, LOGGING_LEVEL));
     }
@@ -225,6 +243,15 @@ public class ConfigurationLoader {
             return Double.parseDouble(value);
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Configuration property must be a valid number: " + AI_TEMPERATURE, exception);
+        }
+    }
+
+    private int port(final Properties properties, final String key) {
+        final String value = text(properties, key);
+        try {
+            return Integer.parseInt(value);
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Configuration property must be a valid port: " + key, exception);
         }
     }
 

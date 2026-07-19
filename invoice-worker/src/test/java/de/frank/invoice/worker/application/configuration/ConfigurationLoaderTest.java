@@ -34,6 +34,8 @@ class ConfigurationLoaderTest {
         assertThat(configuration.ai().temperature()).isZero();
         assertThat(configuration.batch().inputDirectory()).isEqualTo(Path.of("input"));
         assertThat(configuration.batch().recursive()).isFalse();
+        assertThat(configuration.api().host()).isEqualTo("127.0.0.1");
+        assertThat(configuration.api().port()).isEqualTo(8080);
         assertThat(configuration.logging().level()).isEqualTo("INFO");
     }
 
@@ -54,6 +56,7 @@ class ConfigurationLoaderTest {
         assertThat(configuration.ai().provider()).isNotNull();
         assertThat(configuration.ai().model()).isNotNull();
         assertThat(configuration.batch().inputDirectory()).isNotNull();
+        assertThat(configuration.api()).isNotNull();
         assertThat(configuration.logging().level()).isNotNull();
     }
 
@@ -65,6 +68,7 @@ class ConfigurationLoaderTest {
                 ai.provider=openai
                 ai.model=gpt-file
                 ocr.outputDirectory=file-ocr
+                api.port=9090
                 logging.level=DEBUG
                 """);
 
@@ -75,6 +79,7 @@ class ConfigurationLoaderTest {
         assertThat(configuration.ai().provider()).isEqualTo("openai");
         assertThat(configuration.ai().model()).isEqualTo("gpt-file");
         assertThat(configuration.ocr().outputDirectory()).isEqualTo(Path.of("file-ocr"));
+        assertThat(configuration.api().port()).isEqualTo(9090);
         assertThat(configuration.logging().level()).isEqualTo("DEBUG");
     }
 
@@ -150,6 +155,35 @@ class ConfigurationLoaderTest {
         assertThat(configuration.ai().temperature()).isEqualTo(0.3);
     }
 
+
+    @Test
+    void loadEnvironmentOverridesApiConfiguration() {
+        // Arrange
+        final ConfigurationLoader loader = new ConfigurationLoader(name -> switch (name) {
+            case "INVOICE_API_HOST" -> "0.0.0.0";
+            case "INVOICE_API_PORT" -> "9091";
+            default -> null;
+        });
+
+        // Act
+        final ApplicationConfiguration configuration = loader.load();
+
+        // Assert
+        assertThat(configuration.api().host()).isEqualTo("0.0.0.0");
+        assertThat(configuration.api().port()).isEqualTo(9091);
+    }
+
+    @Test
+    void loadRejectsInvalidApiPort() {
+        // Arrange
+        final Properties properties = new Properties();
+        properties.setProperty("api.port", "invalid");
+
+        // Act / Assert
+        assertThatThrownBy(() -> new ConfigurationLoader(name -> null).load(properties))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("api.port");
+    }
     @Test
     void loadRejectsUnknownProvider() {
         // Arrange

@@ -24,5 +24,6 @@ class ApplicationConfigurationTest {
         assertThat(configuration.ocr()).isNotNull();
         assertThat(configuration.ai()).isNotNull();
         assertThat(configuration.batch()).isNotNull();
+        assertThat(configuration.api()).isNotNull();
     }
 }
