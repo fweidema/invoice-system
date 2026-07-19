@@ -2,12 +2,18 @@
     "use strict";
 
     const refreshIntervalMillis = 60000;
-    const pageSize = 25;
+    const defaultPageSize = 25;
+    const defaultInvoiceSort = "importedAt";
+    const defaultHistorySort = "startedAt";
+    const defaultDirection = "DESC";
+
     const state = {
-        invoices: emptyPage("importedAt", "DESC"),
-        history: emptyPage("startedAt", "DESC"),
+        invoices: emptyPage(defaultInvoiceSort, defaultDirection),
+        history: emptyPage(defaultHistorySort, defaultDirection),
         invoicePage: 0,
         historyPage: 0,
+        invoiceSize: defaultPageSize,
+        historySize: defaultPageSize,
         selectedKey: null
     };
 
@@ -27,21 +33,34 @@
         invoiceUpdated: document.querySelector("#invoice-updated"),
         detailType: document.querySelector("#detail-type"),
         detailList: document.querySelector("#detail-list"),
+        historyFilters: document.querySelector("#history-filters"),
         historyQuery: document.querySelector("#history-query"),
         historyStatus: document.querySelector("#history-status"),
-        historySort: document.querySelector("#history-sort"),
-        historyDirection: document.querySelector("#history-direction"),
         historyDateFrom: document.querySelector("#history-date-from"),
         historyDateTo: document.querySelector("#history-date-to"),
+        historySize: document.querySelector("#history-size"),
+        historySort: document.querySelector("#history-sort"),
+        historyDirection: document.querySelector("#history-direction"),
+        historyReset: document.querySelector("#history-reset"),
+        historyFirst: document.querySelector("#history-first"),
         historyPrev: document.querySelector("#history-prev"),
         historyNext: document.querySelector("#history-next"),
+        historyLast: document.querySelector("#history-last"),
         historyPageInfo: document.querySelector("#history-page-info"),
+        invoiceFilters: document.querySelector("#invoice-filters"),
         invoiceQuery: document.querySelector("#invoice-query"),
         invoiceSupplier: document.querySelector("#invoice-supplier"),
+        invoiceNumber: document.querySelector("#invoice-number"),
+        invoiceDateFrom: document.querySelector("#invoice-date-from"),
+        invoiceDateTo: document.querySelector("#invoice-date-to"),
+        invoiceSize: document.querySelector("#invoice-size"),
         invoiceSort: document.querySelector("#invoice-sort"),
         invoiceDirection: document.querySelector("#invoice-direction"),
+        invoiceReset: document.querySelector("#invoice-reset"),
+        invoiceFirst: document.querySelector("#invoice-first"),
         invoicePrev: document.querySelector("#invoice-prev"),
         invoiceNext: document.querySelector("#invoice-next"),
+        invoiceLast: document.querySelector("#invoice-last"),
         invoicePageInfo: document.querySelector("#invoice-page-info")
     };
 
@@ -56,38 +75,66 @@
     });
 
     function bindControls() {
-        [elements.historyQuery, elements.historyStatus, elements.historySort, elements.historyDirection, elements.historyDateFrom, elements.historyDateTo].forEach((control) => {
-            control.addEventListener("input", () => {
+        elements.historyFilters.addEventListener("submit", (event) => {
+            event.preventDefault();
+            state.historyPage = 0;
+            void refreshHistory();
+        });
+        [elements.historyStatus, elements.historySort, elements.historyDirection, elements.historySize].forEach((control) => {
+            control.addEventListener("change", () => {
                 state.historyPage = 0;
+                state.historySize = selectedSize(elements.historySize);
                 void refreshHistory();
             });
         });
-        [elements.invoiceQuery, elements.invoiceSupplier, elements.invoiceSort, elements.invoiceDirection].forEach((control) => {
-            control.addEventListener("input", () => {
+        elements.historyReset.addEventListener("click", () => resetHistoryFilters());
+        elements.historyFirst.addEventListener("click", () => goToHistoryPage(0));
+        elements.historyPrev.addEventListener("click", () => goToHistoryPage(state.historyPage - 1));
+        elements.historyNext.addEventListener("click", () => goToHistoryPage(state.historyPage + 1));
+        elements.historyLast.addEventListener("click", () => goToHistoryPage(lastPageIndex(state.history)));
+
+        elements.invoiceFilters.addEventListener("submit", (event) => {
+            event.preventDefault();
+            state.invoicePage = 0;
+            void refreshInvoices();
+        });
+        [elements.invoiceSort, elements.invoiceDirection, elements.invoiceSize].forEach((control) => {
+            control.addEventListener("change", () => {
                 state.invoicePage = 0;
+                state.invoiceSize = selectedSize(elements.invoiceSize);
                 void refreshInvoices();
             });
         });
-        elements.historyPrev.addEventListener("click", () => changeHistoryPage(-1));
-        elements.historyNext.addEventListener("click", () => changeHistoryPage(1));
-        elements.invoicePrev.addEventListener("click", () => changeInvoicePage(-1));
-        elements.invoiceNext.addEventListener("click", () => changeInvoicePage(1));
+        elements.invoiceReset.addEventListener("click", () => resetInvoiceFilters());
+        elements.invoiceFirst.addEventListener("click", () => goToInvoicePage(0));
+        elements.invoicePrev.addEventListener("click", () => goToInvoicePage(state.invoicePage - 1));
+        elements.invoiceNext.addEventListener("click", () => goToInvoicePage(state.invoicePage + 1));
+        elements.invoiceLast.addEventListener("click", () => goToInvoicePage(lastPageIndex(state.invoices)));
     }
 
     async function refreshData() {
-        try {
-            const health = await fetchJson("/api/health");
-            setOnline(health && health.status === "UP");
-            await Promise.all([refreshInvoices(), refreshHistory()]);
-            clearError();
-        } catch (error) {
+        const healthResult = await settle(() => fetchJson("/api/health"));
+        if (healthResult.status === "fulfilled") {
+            setOnline(healthResult.value && healthResult.value.status === "UP");
+        } else {
             setOnline(false);
-            showError("Die REST-API ist aktuell nicht erreichbar. Vorhandene Daten bleiben sichtbar.");
         }
+
+        const results = await Promise.allSettled([refreshInvoices(), refreshHistory()]);
+        const failures = results.filter((result) => result.status === "rejected");
+        if (healthResult.status === "rejected" || failures.length > 0) {
+            showError("Einige Daten konnten nicht aktualisiert werden. Vorhandene Daten bleiben sichtbar.");
+            return;
+        }
+        clearError();
     }
 
-    async function refreshInvoices() {
+    async function refreshInvoices(retried = false) {
         const page = await fetchJson("/api/invoices?" + invoiceQueryString());
+        if (shouldReloadPage(state.invoicePage, page.totalPages, retried)) {
+            state.invoicePage = correctedPage(page.totalPages);
+            return refreshInvoices(true);
+        }
         state.invoices = page;
         renderInvoices();
         elements.invoiceCount.textContent = String(page.totalElements || 0);
@@ -95,13 +142,25 @@
         updateSelection();
     }
 
-    async function refreshHistory() {
+    async function refreshHistory(retried = false) {
         const page = await fetchJson("/api/processing-history?" + historyQueryString());
+        if (shouldReloadPage(state.historyPage, page.totalPages, retried)) {
+            state.historyPage = correctedPage(page.totalPages);
+            return refreshHistory(true);
+        }
         state.history = page;
         renderHistory();
         elements.historyCount.textContent = String(page.totalElements || 0);
         elements.historyUpdated.textContent = "Aktualisiert " + formatTime(new Date());
         updateSelection();
+    }
+
+    async function settle(action) {
+        try {
+            return { status: "fulfilled", value: await action() };
+        } catch (error) {
+            return { status: "rejected", reason: error };
+        }
     }
 
     async function fetchJson(url) {
@@ -115,18 +174,21 @@
     function invoiceQueryString() {
         const parameters = new URLSearchParams();
         parameters.set("page", String(state.invoicePage));
-        parameters.set("size", String(pageSize));
+        parameters.set("size", String(state.invoiceSize));
         parameters.set("sort", elements.invoiceSort.value);
         parameters.set("direction", elements.invoiceDirection.value);
         append(parameters, "q", elements.invoiceQuery.value);
         append(parameters, "supplier", elements.invoiceSupplier.value);
+        append(parameters, "invoiceNumber", elements.invoiceNumber.value);
+        append(parameters, "dateFrom", elements.invoiceDateFrom.value);
+        append(parameters, "dateTo", elements.invoiceDateTo.value);
         return parameters.toString();
     }
 
     function historyQueryString() {
         const parameters = new URLSearchParams();
         parameters.set("page", String(state.historyPage));
-        parameters.set("size", String(pageSize));
+        parameters.set("size", String(state.historySize));
         parameters.set("sort", elements.historySort.value);
         parameters.set("direction", elements.historyDirection.value);
         append(parameters, "q", elements.historyQuery.value);
@@ -159,7 +221,7 @@
             row.addEventListener("click", () => selectInvoice(invoice.invoiceNumber));
             elements.invoiceTable.append(row);
         });
-        renderPagination(state.invoices, elements.invoicePrev, elements.invoiceNext, elements.invoicePageInfo);
+        renderPagination(state.invoices, elements.invoiceFirst, elements.invoicePrev, elements.invoiceNext, elements.invoiceLast, elements.invoicePageInfo);
     }
 
     function renderHistory() {
@@ -179,25 +241,68 @@
             row.addEventListener("click", () => selectHistory(entry.documentId));
             elements.historyTable.append(row);
         });
-        renderPagination(state.history, elements.historyPrev, elements.historyNext, elements.historyPageInfo);
+        renderPagination(state.history, elements.historyFirst, elements.historyPrev, elements.historyNext, elements.historyLast, elements.historyPageInfo);
     }
 
-    function renderPagination(page, previous, next, label) {
-        const totalPages = Math.max(page.totalPages || 0, 1);
+    function renderPagination(page, first, previous, next, last, label) {
+        const totalPages = page.totalPages || 0;
+        if (totalPages === 0) {
+            label.textContent = "Seite 0 von 0";
+            [first, previous, next, last].forEach((button) => { button.disabled = true; });
+            return;
+        }
         const currentPage = (page.page || 0) + 1;
         label.textContent = "Seite " + currentPage + " von " + totalPages;
+        first.disabled = currentPage <= 1;
         previous.disabled = currentPage <= 1;
         next.disabled = currentPage >= totalPages;
+        last.disabled = currentPage >= totalPages;
     }
 
-    function changeHistoryPage(delta) {
-        state.historyPage = Math.max(0, state.historyPage + delta);
+    function shouldReloadPage(currentPage, totalPages, retried) {
+        return !retried && totalPages > 0 && currentPage >= totalPages;
+    }
+
+    function correctedPage(totalPages) {
+        return totalPages > 0 ? totalPages - 1 : 0;
+    }
+
+    function lastPageIndex(page) {
+        return page.totalPages > 0 ? page.totalPages - 1 : 0;
+    }
+
+    function goToHistoryPage(page) {
+        state.historyPage = Math.max(0, page);
         void refreshHistory();
     }
 
-    function changeInvoicePage(delta) {
-        state.invoicePage = Math.max(0, state.invoicePage + delta);
+    function goToInvoicePage(page) {
+        state.invoicePage = Math.max(0, page);
         void refreshInvoices();
+    }
+
+    function resetHistoryFilters() {
+        elements.historyFilters.reset();
+        elements.historySort.value = defaultHistorySort;
+        elements.historyDirection.value = defaultDirection;
+        elements.historySize.value = String(defaultPageSize);
+        state.historyPage = 0;
+        state.historySize = defaultPageSize;
+        void refreshHistory();
+    }
+
+    function resetInvoiceFilters() {
+        elements.invoiceFilters.reset();
+        elements.invoiceSort.value = defaultInvoiceSort;
+        elements.invoiceDirection.value = defaultDirection;
+        elements.invoiceSize.value = String(defaultPageSize);
+        state.invoicePage = 0;
+        state.invoiceSize = defaultPageSize;
+        void refreshInvoices();
+    }
+
+    function selectedSize(select) {
+        return Number.parseInt(select.value, 10) || defaultPageSize;
     }
 
     async function selectInvoice(invoiceNumber) {
@@ -325,14 +430,17 @@
         if (!value) {
             return "-";
         }
-        return new Intl.DateTimeFormat("de-DE").format(new Date(value));
+        return new Intl.DateTimeFormat("de-DE").format(new Date(value + "T00:00:00"));
     }
 
     function formatDateTime(value) {
         if (!value) {
             return "-";
         }
-        return new Intl.DateTimeFormat("de-DE", { dateStyle: "short", timeStyle: "short" }).format(new Date(value));
+        return new Intl.DateTimeFormat("de-DE", {
+            dateStyle: "short",
+            timeStyle: "short"
+        }).format(new Date(value));
     }
 
     function formatTime(value) {
@@ -343,14 +451,14 @@
         if (value === null || value === undefined) {
             return "-";
         }
-        return value + " ms";
+        return String(value) + " ms";
     }
 
     function safeText(value) {
-        return value === null || value === undefined ? "" : String(value);
+        return value || "";
     }
 
     function emptyPage(sort, direction) {
-        return { items: [], page: 0, size: pageSize, totalElements: 0, totalPages: 0, sort, direction };
+        return { items: [], page: 0, size: defaultPageSize, totalElements: 0, totalPages: 0, sort, direction };
     }
 })();

@@ -63,6 +63,22 @@ class ReadOnlyApiServerTest {
         assertThat(response.body()).contains("Invoice Monitoring");
         assertThat(response.body()).contains("/css/dashboard.css");
         assertThat(response.body()).contains("/js/dashboard.js");
+        assertThat(response.body()).contains("invoice-number");
+        assertThat(response.body()).contains("invoice-date-from");
+        assertThat(response.body()).contains("invoice-date-to");
+        assertThat(response.body()).contains("invoice-size");
+        assertThat(response.body()).contains("history-size");
+        assertThat(response.body()).contains("<option>10</option>");
+        assertThat(response.body()).contains("<option selected>25</option>");
+        assertThat(response.body()).contains("<option>50</option>");
+        assertThat(response.body()).contains("<option>100</option>");
+        assertThat(response.body()).contains("invoice-first");
+        assertThat(response.body()).contains("invoice-last");
+        assertThat(response.body()).contains("history-first");
+        assertThat(response.body()).contains("history-last");
+        assertThat(response.body()).contains("Seite 0 von 0");
+        assertThat(response.body()).contains("Filter anwenden");
+        assertThat(response.body()).contains("Zuruecksetzen");
     }
 
     @Test
@@ -95,6 +111,23 @@ class ReadOnlyApiServerTest {
         assertThat(javascript.statusCode()).isEqualTo(200);
         assertThat(contentType(javascript)).contains("application/javascript");
         assertThat(javascript.body()).contains("/api/invoices");
+        assertThat(javascript.body()).contains("append(parameters, \"invoiceNumber\", elements.invoiceNumber.value)");
+        assertThat(javascript.body()).contains("append(parameters, \"dateFrom\", elements.invoiceDateFrom.value)");
+        assertThat(javascript.body()).contains("append(parameters, \"dateTo\", elements.invoiceDateTo.value)");
+        assertThat(javascript.body()).contains("const defaultPageSize = 25");
+        assertThat(javascript.body()).contains("Promise.allSettled([refreshInvoices(), refreshHistory()])");
+        assertThat(javascript.body()).contains("Seite 0 von 0");
+        assertThat(javascript.body()).contains("historyFirst");
+        assertThat(javascript.body()).contains("historyLast");
+        assertThat(javascript.body()).contains("invoiceFirst");
+        assertThat(javascript.body()).contains("invoiceLast");
+        assertThat(javascript.body()).contains("resetInvoiceFilters");
+        assertThat(javascript.body()).contains("resetHistoryFilters");
+        assertThat(javascript.body()).contains("shouldReloadPage");
+        assertThat(javascript.body()).contains("return refreshInvoices(true)");
+        assertThat(javascript.body()).contains("return refreshHistory(true)");
+        assertThat(javascript.body()).contains("/api/processing-history/");
+        assertThat(javascript.body()).doesNotContain("addEventListener(\"input\"");
         assertThat(javascript.body()).doesNotContain("cell(\"Verarbeitung\")");
     }
 

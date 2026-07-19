@@ -102,7 +102,7 @@ GET /api/processing-history?page=0&size=25&sort=startedAt&direction=DESC&q=&stat
 GET /api/processing-history/{documentId}
 ```
 
-Die Listen-Endpunkte liefern ein Page-Objekt mit `items`, `page`, `size`, `totalElements`, `totalPages`, `sort` und `direction`. Filterwerte werden serverseitig in SQLite angewendet; Sortierfelder sind fest validiert. Das Dashboard aktualisiert die Daten alle 60 Sekunden ohne vollstaendigen Seiten-Reload. Es bietet keine Schreib-, Loesch- oder Downloadfunktionen und zeigt keine internen Dateipfade an.
+Die Listen-Endpunkte liefern ein Page-Objekt mit `items`, `page`, `size`, `totalElements`, `totalPages`, `sort` und `direction`. Filterwerte werden serverseitig in SQLite angewendet; Sortierfelder sind fest validiert. Das Dashboard aktualisiert die Daten alle 60 Sekunden ohne vollstaendigen Seiten-Reload, bietet je Liste Seitengroessen von 10, 25, 50 und 100 und nutzt bewusst Select-Felder fuer Sortierung und Richtung, damit die vorhandene Formularsteuerung konsistent bleibt. Es bietet keine Schreib-, Loesch- oder Downloadfunktionen und zeigt keine internen Dateipfade an.
 ## Konfiguration
 
 Die aktuelle Konfiguration wird Properties-basiert geladen. Wichtige Defaults:
