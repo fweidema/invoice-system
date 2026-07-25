@@ -117,3 +117,21 @@ Mindestens folgende Dokumente werden aktuell gehalten:
 - Keine unnoetigen Frameworks.
 - Verstaendliche Methodennamen.
 - Kleine Klassen mit klarer Verantwortung.
+
+## Autonome Codex-Policy
+
+Codex bearbeitet klar beschriebene Aufgaben standardmaessig end-to-end: Analyse, Implementierung, Tests, Build, Dokumentation, Commit und Push des Feature-Branches. Rueckfragen sind nur bei den in `AGENTS.md` definierten Stop-Kriterien erforderlich, insbesondere bei produktiven Daten, Breaking Changes, Secrets, grundlegenden Architekturentscheidungen, produktivem VPS-Zugriff, Force-Push oder nicht reversiblen Aktionen.
+
+Bei Build- oder Testfehlern analysiert Codex die Ursache, behebt risikoarme Fehler selbst, fuehrt betroffene Tests erneut aus und wiederholt anschliessend den vollstaendigen Build.
+## Einheitliche Entwicklerbefehle
+
+```bash
+./scripts/dev-build.sh
+./scripts/dev-test.sh [invoice-worker|TestKlasse]
+./scripts/dev-doctor.sh
+./scripts/dev-start.sh [api|watch|batch]
+./scripts/dev-stop.sh
+./scripts/dev-reset-db.sh [--yes]
+```
+
+Die Skripte muessen ohne produktive Infrastruktur funktionieren. Der Datenbank-Reset ist auf lokale `runtime/database/`-Pfade begrenzt und bricht ab, wenn Entwicklungscontainer laufen.
