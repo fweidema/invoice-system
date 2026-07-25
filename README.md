@@ -58,6 +58,27 @@ Unter Bash:
 
 Der normale Build benoetigt keinen OpenAI-Key und verursacht keine API-Kosten.
 
+## Entwicklerbefehle
+
+Alle Skripte werden aus dem Repository-Root gestartet und verwenden robuste relative Pfade. Fuer Bash-Aufrufe muss Java 21 in derselben Shell ueber `PATH` oder `JAVA_HOME` verfuegbar sein; unter Windows PowerShell kann alternativ der Maven Wrapper `mvnw.cmd` direkt genutzt werden.
+
+```bash
+./scripts/dev-build.sh              # vollstaendiger Build: ./mvnw clean verify
+./scripts/dev-test.sh               # alle Tests
+./scripts/dev-test.sh invoice-worker
+./scripts/dev-test.sh ReadOnlyApiServerTest
+./scripts/dev-doctor.sh             # lokale Diagnose ohne Secret-Ausgabe
+./scripts/dev-start.sh api          # API-Profil starten und /api/health pruefen
+./scripts/dev-start.sh watch        # Watch-Service starten
+./scripts/dev-start.sh batch        # Batch-Container starten
+./scripts/dev-stop.sh               # Entwicklungscontainer stoppen, Daten bleiben erhalten
+./scripts/dev-reset-db.sh           # interaktiver lokaler DB-Reset
+./scripts/dev-reset-db.sh --yes     # automatisierter lokaler DB-Reset
+```
+
+`dev-reset-db.sh` loescht nur lokale Dateien unter `runtime/database/` und verweigert andere Pfade sowie laufende `invoice-worker`-Container. Produktive Datenbanken, Backups und VPS-Daten duerfen nicht automatisch geloescht werden.
+
+`dev-doctor.sh` prueft Java 21, Maven Wrapper, Docker Compose, Runtime-Verzeichnisse, Datenbankrechte, SQLite-CLI oder sqlite-jdbc-Ersatzweg, Portbelegung, Containerstatus, API-Healthcheck, Watch-Service-Container, relevante Umgebungsvariablen ohne Secret-Werte sowie Git-Branch und Arbeitsbaumstatus.
 ## CLI
 
 Grundform:
@@ -161,6 +182,16 @@ invoice-system
 
 
 ## Docker-Schnellstart
+
+Fuer die lokale Entwicklung koennen die Dev-Skripte genutzt werden:
+
+```bash
+./scripts/dev-start.sh api
+./scripts/dev-start.sh watch
+./scripts/dev-stop.sh
+```
+
+Die Compose-Konfiguration enthaelt Healthchecks fuer Batch-, Watch- und API-Container. Der API-Healthcheck nutzt `GET /api/health`; Batch und Watch nutzen den Container-Self-Check ohne Dokumentverarbeitung.
 
 Der Worker kann als einzelner Docker-Container mit persistenter Runtime-Struktur betrieben werden. Der produktionsnahe Mock-Test nutzt weiterhin `ai.provider=mock` und benoetigt keinen OpenAI-Key.
 

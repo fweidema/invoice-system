@@ -20,6 +20,7 @@ FROM eclipse-temurin:21-jre
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ghostscript \
+        curl \
         ocrmypdf \
         tesseract-ocr \
         tesseract-ocr-deu \
