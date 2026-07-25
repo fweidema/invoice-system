@@ -82,6 +82,29 @@ docker compose stop invoice-worker-watch
 ```
 
 Es werden keine Ports veroeffentlicht, kein Docker-Socket gemountet und keine Secrets in Properties-Dateien gespeichert. Details stehen in [watch-service.md](watch-service.md).
+
+## Healthchecks und Diagnose
+
+Die Compose-Datei definiert Healthchecks fuer alle Services:
+
+- `invoice-worker` und `invoice-worker-watch` fuehren `/app/container-self-check.sh` aus. Dieser prueft Werkzeuge, Konfiguration und Schreibrechte, verarbeitet aber keine Rechnungen.
+- `invoice-worker-api` prueft `GET /api/health` innerhalb des Containers.
+
+Vor einem VPS-Update lokal ausfuehren:
+
+```bash
+./scripts/dev-doctor.sh
+./scripts/dev-build.sh
+```
+
+Auf dem VPS bleibt der Self-Check der erste risikoarme Schritt:
+
+```bash
+./scripts/prepare-runtime.sh
+docker compose build
+./scripts/container-self-check.sh
+docker compose ps
+```
 ## Produktiver OpenAI-Betrieb
 
 Erst nach erfolgreichem Mock-Test `docker/application.properties` auf `ai.provider=openai` umstellen und den API-Key ausschliesslich als Environment-Variable setzen:
@@ -119,6 +142,21 @@ docker compose run --rm invoice-worker
 
 Runtime-Daten unter `runtime/` werden dabei nicht geloescht.
 
+
+## Sicherer Update-Prozess
+
+Der produktive VPS wird nicht automatisch durch Codex aktualisiert. Fuer einen spaeteren manuellen Rollout:
+
+1. Backup von `runtime/database/` und `runtime/archive/` erstellen.
+2. Feature-Branch nach Review in `main` mergen.
+3. Auf dem VPS `git fetch` und den freigegebenen Commit auschecken.
+4. `./scripts/prepare-runtime.sh` ausfuehren.
+5. `docker compose build` ausfuehren.
+6. `./scripts/container-self-check.sh` ausfuehren.
+7. Zuerst mit `ai.provider=mock` testen.
+8. Erst danach produktiven OpenAI-Betrieb mit gesetztem `OPENAI_API_KEY` starten.
+
+`./scripts/dev-reset-db.sh` ist nur fuer lokale Entwicklungsdaten vorgesehen und darf nicht gegen VPS- oder Backup-Pfade verwendet werden.
 ## Rollback
 
 1. Vorherigen Git-Tag oder Commit auschecken.

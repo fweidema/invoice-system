@@ -94,6 +94,18 @@ class WatchServiceRunnerTest {
     }
 
     @Test
+    void runRemembersNotReadyFileAndSkipsRepeatedEvent() throws Exception {
+        final Path file = tempDirectory.resolve("growing.pdf");
+        Files.writeString(file, "pdf");
+        final TestInvoiceWorker invoiceWorker = new TestInvoiceWorker();
+        final TestDirectoryWatcher watcher = new TestDirectoryWatcher(List.of(file, file));
+
+        final int exitCode = runner(invoiceWorker, watcher, false, false).run();
+
+        assertThat(exitCode).isZero();
+        assertThat(invoiceWorker.processedNames()).isEmpty();
+    }
+    @Test
     void requestShutdownClosesWatcher() {
         final TestInvoiceWorker invoiceWorker = new TestInvoiceWorker();
         final TestDirectoryWatcher watcher = new TestDirectoryWatcher(List.of());

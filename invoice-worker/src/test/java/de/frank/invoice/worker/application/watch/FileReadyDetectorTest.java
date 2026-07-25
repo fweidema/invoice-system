@@ -102,6 +102,16 @@ class FileReadyDetectorTest {
     }
 
     @Test
+    void supportedPdfNameRejectsHiddenTemporaryAndNonPdfFiles() {
+        final MutableClock clock = new MutableClock();
+        final FileReadyDetector detector = detector(clock, Duration.ofMillis(20), Duration.ofMillis(100));
+
+        assertThat(detector.supportedPdfName(tempDirectory.resolve(".rechnung.pdf"))).isFalse();
+        assertThat(detector.supportedPdfName(tempDirectory.resolve("~rechnung.pdf"))).isFalse();
+        assertThat(detector.supportedPdfName(tempDirectory.resolve("rechnung.pdf.tmp"))).isFalse();
+        assertThat(detector.supportedPdfName(tempDirectory.resolve("rechnung.pdf"))).isTrue();
+    }
+    @Test
     void waitUntilReadyTimesOutBeforeStableTime() throws Exception {
         final Path file = tempDirectory.resolve("rechnung.pdf");
         Files.writeString(file, "pdf");

@@ -14,7 +14,6 @@ import java.math.BigDecimal;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -150,6 +149,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             """;
 
     private final Path databasePath;
+    private final SQLiteConnectionFactory connectionFactory;
 
     /**
      * Creates a repository using the configured SQLite database path.
@@ -165,6 +165,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
      */
     public SQLiteInvoiceRepository(final Path databasePath) {
         this.databasePath = Objects.requireNonNull(databasePath, "databasePath must not be null");
+        this.connectionFactory = new SQLiteConnectionFactory(this.databasePath);
         initialize();
     }
 
@@ -345,7 +346,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
     }
 
     private Connection openConnection() throws SQLException {
-        return DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath().normalize());
+        return connectionFactory.openConnection();
     }
 
     private String invoiceWhereClause(final InvoiceSearchCriteria criteria, final List<Object> parameters) {
