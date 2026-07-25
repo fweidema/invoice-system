@@ -10,7 +10,6 @@ import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.sql.Connection;
-import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
@@ -107,6 +106,7 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
     private static final String SEARCH_HISTORY_PREFIX = "SELECT * FROM processing_history";
 
     private final Path databasePath;
+    private final SQLiteConnectionFactory connectionFactory;
 
     /**
      * Creates a repository using an explicit SQLite database path.
@@ -115,6 +115,7 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
      */
     public SQLiteProcessingHistoryRepository(final Path databasePath) {
         this.databasePath = Objects.requireNonNull(databasePath, "databasePath must not be null");
+        this.connectionFactory = new SQLiteConnectionFactory(this.databasePath);
         initialize();
     }
 
@@ -294,7 +295,7 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
     }
 
     private Connection openConnection() throws SQLException {
-        return DriverManager.getConnection("jdbc:sqlite:" + databasePath.toAbsolutePath().normalize());
+        return connectionFactory.openConnection();
     }
 
     private void bindEntry(final PreparedStatement statement, final ProcessingHistoryEntry entry) throws SQLException {
