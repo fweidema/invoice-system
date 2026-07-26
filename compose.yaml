@@ -81,9 +81,20 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
     mem_limit: 512m
+    environment:
+      MANUAL_REVIEW_DEFAULT_PAGE_SIZE: ${MANUAL_REVIEW_DEFAULT_PAGE_SIZE:-25}
+      MANUAL_REVIEW_MAX_PAGE_SIZE: ${MANUAL_REVIEW_MAX_PAGE_SIZE:-100}
+      MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH: ${MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH:-100000}
+      MANUAL_REVIEW_DOWNLOAD_ENABLED: ${MANUAL_REVIEW_DOWNLOAD_ENABLED:-true}
     ports:
       - "${INVOICE_API_PORT:-8080}:8080"
     volumes:
+      - ./runtime/input:/data/input
+      - ./runtime/ocr:/data/ocr
+      - ./runtime/work:/data/work
+      - ./runtime/manual-review:/data/manual-review
+      - ./runtime/error:/data/error
+      - ./runtime/archive:/data/archive
       - ./runtime/database:/data/database
       - ./runtime/logs:/data/logs
       - ./docker/application.properties:/config/application.properties:ro

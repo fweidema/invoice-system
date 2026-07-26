@@ -47,6 +47,11 @@ processing.manualReviewDirectory=manual-review
 processing.errorDirectory=error
 processing.maximumErrorMessageCharacters=1024
 
+manualReview.defaultPageSize=25
+manualReview.maxPageSize=100
+manualReview.maxOcrTextLength=100000
+manualReview.downloadEnabled=true
+
 logging.level=INFO
 
 api.host=127.0.0.1
@@ -159,6 +164,11 @@ processing.workDirectory=/srv/invoice-system/work
 processing.manualReviewDirectory=/srv/invoice-system/manual-review
 processing.errorDirectory=/srv/invoice-system/error
 processing.maximumErrorMessageCharacters=1024
+
+manualReview.defaultPageSize=25
+manualReview.maxPageSize=100
+manualReview.maxOcrTextLength=100000
+manualReview.downloadEnabled=true
 
 logging.level=INFO
 ```

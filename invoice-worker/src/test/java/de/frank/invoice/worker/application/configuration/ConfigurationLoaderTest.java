@@ -35,6 +35,10 @@ class ConfigurationLoaderTest {
         assertThat(configuration.processing().retryDelays())
                 .containsExactly(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(30));
         assertThat(configuration.processing().workDirectory()).isEqualTo(Path.of("work"));
+        assertThat(configuration.manualReview().defaultPageSize()).isEqualTo(25);
+        assertThat(configuration.manualReview().maximumPageSize()).isEqualTo(100);
+        assertThat(configuration.manualReview().maximumOcrTextLength()).isEqualTo(100_000);
+        assertThat(configuration.manualReview().downloadEnabled()).isTrue();
         assertThat(configuration.ai().provider()).isEqualTo("mock");
         assertThat(configuration.ai().model()).isEqualTo("gpt-5");
         assertThat(configuration.ai().temperature()).isZero();
@@ -247,5 +251,16 @@ class ConfigurationLoaderTest {
         assertThatThrownBy(() -> new ConfigurationLoader(name -> null).load(properties))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("retryDelays");
+    }
+
+    @Test
+    void loadRejectsManualReviewDefaultLargerThanMaximum() {
+        final Properties properties = new Properties();
+        properties.setProperty("manualReview.defaultPageSize", "101");
+        properties.setProperty("manualReview.maxPageSize", "100");
+
+        assertThatThrownBy(() -> new ConfigurationLoader(name -> null).load(properties))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("page sizes");
     }
 }
