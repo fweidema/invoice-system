@@ -74,3 +74,51 @@ der bestehenden Regressionstestsuite abgedeckt.
    ueberschrittenes Exportlimit pruefen.
 9. `curl -fsS http://localhost:8081/health` ausfuehren und danach kontrollieren,
    dass dadurch kein Export und keine Rechnungsverarbeitung gestartet wurde.
+
+## Nachtrag: MIME-Type-Auslieferung der Vaadin-Assets
+
+### Ursache
+
+`InvoiceUiServer` deaktivierte Tomcats Default-Web-XML mit
+`tomcat.setAddDefaultWebXmlToWebapp(false)`. Dadurch fehlten dem Servlet-Context
+die Standard-MIME-Mappings. Vaadin lieferte das generierte JavaScript-Bundle
+zwar mit HTTP 200 aus, aber ohne `Content-Type`; Browser verweigerten deshalb
+die Ausfuehrung als Modul und die Seite blieb leer.
+
+Das Reaktivieren des gesamten Default-Web-XML wurde geprueft. Es setzt den
+korrekten JavaScript-MIME-Type, registriert aber zugleich Tomcats JSP-Servlet.
+Da die Anwendung bewusst keine Jasper-/JSP-Laufzeitabhaengigkeit enthaelt,
+entsteht dabei beim Start ein `ClassNotFoundException`-Fehler fuer
+`org.apache.jasper.servlet.JspServlet`.
+
+### Aenderung
+
+Das Default-Web-XML bleibt deshalb deaktiviert. `InvoiceUiServer` registriert
+am Tomcat-Context explizite MIME-Mappings fuer JavaScript, CSS, JSON,
+Source-Maps, Bilder und Webfonts. Insbesondere werden `.js` und `.mjs` als
+`application/javascript` ausgeliefert.
+
+Der HTTP-Regressionstest ermittelt den aktuellen gehashten Bundle-Pfad aus der
+Root-Seite und prueft:
+
+- Root-Seite liefert HTTP 200 und referenziert ein generiertes Bundle,
+- `/VAADIN/build/<bundle>.js` liefert HTTP 200,
+- `Content-Type` ist `application/javascript` oder `text/javascript`,
+- der Bundle-Inhalt ist nicht leer,
+- `/health` liefert weiterhin `200 OK` und loest keinen Export aus.
+
+### Testergebnis
+
+- Fokussierter `InvoiceUiServerTest`: erfolgreich.
+- `./mvnw clean verify`: erfolgreich, 294 Tests, 0 Fehler,
+  0 Fehlschlaege, 0 uebersprungen.
+- `git diff --check`: erfolgreich.
+- `docker compose --profile ui build invoice-worker-ui`: erfolgreich.
+- `docker compose --profile ui up -d invoice-worker-ui`: Container ist
+  `healthy`.
+- Root-Seite: HTTP 200; aktuelles Bundle
+  `/VAADIN/build/indexhtml-BoQd93Gs.js` wurde dynamisch ermittelt.
+- `curl -I` fuer das aktuelle Bundle: HTTP 200,
+  `Content-Type: application/javascript;charset=utf-8`,
+  `Content-Length: 77575`.
+- `/health`: HTTP 200, `Content-Type: text/plain;charset=UTF-8`.

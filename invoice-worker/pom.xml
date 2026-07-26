@@ -25,6 +25,7 @@
                 <version>${vaadin.version}</version>
                 <executions>
                     <execution>
+                        <phase>process-test-classes</phase>
                         <goals>
                             <goal>build-frontend</goal>
                         </goals>

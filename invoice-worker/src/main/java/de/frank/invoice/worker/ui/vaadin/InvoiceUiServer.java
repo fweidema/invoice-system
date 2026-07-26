@@ -115,6 +115,7 @@ public class InvoiceUiServer implements AutoCloseable {
         final Context context = tomcat.addWebapp(
                 "", Path.of(".").toAbsolutePath().normalize().toString());
         context.setParentClassLoader(InvoiceUiServer.class.getClassLoader());
+        configureStaticResourceMimeMappings(context);
         context.addServletContainerInitializer(new LookupServletContainerInitializer(), Set.of());
         context.addServletContainerInitializer(
                 new RouteRegistryInitializer(), Set.of(InvoiceExportView.class));
@@ -132,6 +133,24 @@ public class InvoiceUiServer implements AutoCloseable {
         vaadin.setAsyncSupported(true);
         vaadin.setLoadOnStartup(2);
         context.addServletMappingDecoded("/*", "vaadin");
+    }
+
+    private void configureStaticResourceMimeMappings(final Context context) {
+        context.addMimeMapping("js", "application/javascript");
+        context.addMimeMapping("mjs", "application/javascript");
+        context.addMimeMapping("css", "text/css");
+        context.addMimeMapping("json", "application/json");
+        context.addMimeMapping("map", "application/json");
+        context.addMimeMapping("svg", "image/svg+xml");
+        context.addMimeMapping("png", "image/png");
+        context.addMimeMapping("jpg", "image/jpeg");
+        context.addMimeMapping("jpeg", "image/jpeg");
+        context.addMimeMapping("gif", "image/gif");
+        context.addMimeMapping("webp", "image/webp");
+        context.addMimeMapping("ico", "image/x-icon");
+        context.addMimeMapping("woff", "font/woff");
+        context.addMimeMapping("woff2", "font/woff2");
+        context.addMimeMapping("ttf", "font/ttf");
     }
 
 }
