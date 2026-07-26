@@ -48,6 +48,7 @@ public class ConfigurationLoader {
     public static final String UI_PORT = "ui.port";
     public static final String UI_SHUTDOWN_TIMEOUT = "ui.shutdownTimeout";
     public static final String UI_MAXIMUM_EXPORT_INVOICES = "ui.maximumExportInvoices";
+    public static final String UI_MANUAL_REVIEW_API_BASE_URI = "ui.manualReviewApiBaseUri";
     public static final String LOGGING_LEVEL = "logging.level";
 
     private static final Map<String, String> ENVIRONMENT_MAPPING = Map.ofEntries(
@@ -70,6 +71,7 @@ public class ConfigurationLoader {
             Map.entry("INVOICE_UI_PORT", UI_PORT),
             Map.entry("INVOICE_UI_SHUTDOWN_TIMEOUT", UI_SHUTDOWN_TIMEOUT),
             Map.entry("INVOICE_UI_MAXIMUM_EXPORT_INVOICES", UI_MAXIMUM_EXPORT_INVOICES),
+            Map.entry("INVOICE_UI_MANUAL_REVIEW_API_BASE_URI", UI_MANUAL_REVIEW_API_BASE_URI),
             Map.entry("INVOICE_OCR_COMMAND", OCR_COMMAND),
             Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
             Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
@@ -204,6 +206,8 @@ public class ConfigurationLoader {
         properties.setProperty(UI_SHUTDOWN_TIMEOUT, "10s");
         properties.setProperty(UI_MAXIMUM_EXPORT_INVOICES,
                 Integer.toString(UiConfiguration.DEFAULT_MAXIMUM_EXPORT_INVOICES));
+        properties.setProperty(UI_MANUAL_REVIEW_API_BASE_URI,
+                UiConfiguration.DEFAULT_MANUAL_REVIEW_API_BASE_URI.toString());
         properties.setProperty(LOGGING_LEVEL, LoggingConfiguration.DEFAULT_LEVEL);
         return properties;
     }
@@ -312,7 +316,8 @@ public class ConfigurationLoader {
                 text(properties, UI_HOST),
                 port(properties, UI_PORT),
                 durationParser.parse(text(properties, UI_SHUTDOWN_TIMEOUT), UI_SHUTDOWN_TIMEOUT),
-                positiveInteger(properties, UI_MAXIMUM_EXPORT_INVOICES));
+                positiveInteger(properties, UI_MAXIMUM_EXPORT_INVOICES),
+                java.net.URI.create(text(properties, UI_MANUAL_REVIEW_API_BASE_URI)));
     }
 
     private LoggingConfiguration logging(final Properties properties) {
