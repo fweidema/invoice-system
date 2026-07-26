@@ -10,6 +10,9 @@ services:
     volumes:
       - ./runtime/input:/data/input
       - ./runtime/ocr:/data/ocr
+      - ./runtime/work:/data/work
+      - ./runtime/manual-review:/data/manual-review
+      - ./runtime/error:/data/error
       - ./runtime/archive:/data/archive
       - ./runtime/database:/data/database
       - ./runtime/logs:/data/logs
@@ -45,6 +48,9 @@ services:
     volumes:
       - ./runtime/input:/data/input
       - ./runtime/ocr:/data/ocr
+      - ./runtime/work:/data/work
+      - ./runtime/manual-review:/data/manual-review
+      - ./runtime/error:/data/error
       - ./runtime/archive:/data/archive
       - ./runtime/database:/data/database
       - ./runtime/logs:/data/logs

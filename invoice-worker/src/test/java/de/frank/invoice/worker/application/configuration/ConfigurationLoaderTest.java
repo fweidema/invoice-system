@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Properties;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -29,6 +30,11 @@ class ConfigurationLoaderTest {
         assertThat(configuration.ocr().language()).isEqualTo("deu");
         assertThat(configuration.ocr().command()).isEqualTo("ocrmypdf");
         assertThat(configuration.ocr().outputDirectory()).isEqualTo(Path.of("ocr"));
+        assertThat(configuration.ocr().timeout()).isEqualTo(Duration.ofMinutes(5));
+        assertThat(configuration.processing().maximumAttempts()).isEqualTo(4);
+        assertThat(configuration.processing().retryDelays())
+                .containsExactly(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(30));
+        assertThat(configuration.processing().workDirectory()).isEqualTo(Path.of("work"));
         assertThat(configuration.ai().provider()).isEqualTo("mock");
         assertThat(configuration.ai().model()).isEqualTo("gpt-5");
         assertThat(configuration.ai().temperature()).isZero();
@@ -230,5 +236,16 @@ class ConfigurationLoaderTest {
         assertThatThrownBy(() -> new ConfigurationLoader(name -> null).load(properties))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("logging.level");
+    }
+
+    @Test
+    void loadRejectsRetryDelayListShorterThanMaximumAttempts() {
+        final Properties properties = new Properties();
+        properties.setProperty("processing.maximumAttempts", "4");
+        properties.setProperty("processing.retryDelays", "1m,5m");
+
+        assertThatThrownBy(() -> new ConfigurationLoader(name -> null).load(properties))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("retryDelays");
     }
 }

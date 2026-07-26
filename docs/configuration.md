@@ -37,6 +37,15 @@ watch.processExistingFilesOnStartup=true
 ocr.command=ocrmypdf
 ocr.language=deu
 ocr.outputDirectory=ocr
+ocr.timeout=5m
+ocr.maximumProcessOutputCharacters=8192
+
+processing.maximumAttempts=4
+processing.retryDelays=1m,5m,30m
+processing.workDirectory=work
+processing.manualReviewDirectory=manual-review
+processing.errorDirectory=error
+processing.maximumErrorMessageCharacters=1024
 
 logging.level=INFO
 
@@ -141,6 +150,15 @@ ui.maximumExportInvoices=10000
 ocr.command=ocrmypdf
 ocr.language=deu
 ocr.outputDirectory=/srv/invoice-system/ocr
+ocr.timeout=5m
+ocr.maximumProcessOutputCharacters=8192
+
+processing.maximumAttempts=4
+processing.retryDelays=1m,5m,30m
+processing.workDirectory=/srv/invoice-system/work
+processing.manualReviewDirectory=/srv/invoice-system/manual-review
+processing.errorDirectory=/srv/invoice-system/error
+processing.maximumErrorMessageCharacters=1024
 
 logging.level=INFO
 ```
@@ -148,3 +166,35 @@ logging.level=INFO
 ## Datenschutz und Secrets
 
 Keine API-Keys in Properties-Dateien, Testressourcen oder Dokumentation speichern. Rechnungstexte koennen personenbezogene oder vertrauliche Daten enthalten. OpenAI sollte nur produktiv aktiviert werden, wenn die Verarbeitung dieser Daten freigegeben ist.
+
+## Robuste Dokumentverarbeitung
+
+Die aktuelle Verarbeitung wird in der SQLite-Tabelle `processing_state` hashbasiert
+gespeichert. Die Statusfolge lautet `RECEIVED -> OCR_RUNNING -> OCR_COMPLETED ->
+EXTRACTION_RUNNING -> EXTRACTION_COMPLETED -> ARCHIVED`. Voruebergehende Fehler
+wechseln nach `RETRY_PENDING`; nach dem vierten erfolglosen Versuch oder bei
+fachlich unklaren Dokumenten folgt `MANUAL_REVIEW`, permanente technische
+Fehler enden in `FAILED`.
+
+`processing.retryDelays` enthaelt je erneutem Versuch eine positive Dauer. Der
+Default `1m,5m,30m` bedeutet insgesamt hoechstens vier Versuche. Ein Neustart
+liest denselben Zustand ueber den SHA-256-Hash wieder ein. Vorhandene
+OCR-Ergebnisse unter `work/<processing-id>/` werden wiederverwendet; bei einem
+reinen Archivierungsfehler wird die bereits gespeicherte Rechnung geladen und
+nur die Archivierung wiederholt. Erfolgreiche Arbeitsverzeichnisse werden
+bereinigt. Retry-relevante Dateien bleiben erhalten.
+
+`input` ist der Eingang, `work` enthaelt isolierte OCR-Zwischenergebnisse,
+`archive` enthaelt erfolgreiche Originale, `manual-review` nimmt Vorgänge mit
+Pruefbedarf auf und `error` permanente Fehler. Verschiebungen erfolgen bevorzugt
+atomar und niemals mit `REPLACE_EXISTING`.
+
+Zur Diagnose sind `processing_id`, Status, Versuch, Fehlercode und
+`next_retry_at` in `processing_state` relevant. Normale Logs enthalten
+technischen Kontext, aber weder Dokumenttext noch KI-Rohantworten oder
+Authorization-Daten. Externe Fehlertexte werden vor der Speicherung auf
+`processing.maximumErrorMessageCharacters` begrenzt.
+
+Die Migration ist rein additiv (`CREATE TABLE/INDEX IF NOT EXISTS`) und kann
+wiederholt gegen eine bestehende Datenbank laufen. Vor einem produktiven Update
+bleibt trotzdem ein Backup der SQLite-Datei empfohlen.
