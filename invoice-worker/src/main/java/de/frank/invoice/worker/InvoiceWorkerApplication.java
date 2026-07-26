@@ -30,6 +30,10 @@ import de.frank.invoice.worker.ui.vaadin.InvoiceUiServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.LinkedHashSet;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
 import java.io.PrintStream;
 import java.time.Clock;
 import java.util.List;
@@ -172,14 +176,15 @@ public class InvoiceWorkerApplication {
                 (document, path) -> pdfTextExtractor.extract(document, path).extractedText(),
                 configuration.processing(),
                 configuration.manualReview(),
-                Set.of(
-                        configuration.batch().inputDirectory(),
-                        configuration.watch().directory(),
-                        configuration.processing().workDirectory(),
-                        configuration.processing().manualReviewDirectory(),
-                        configuration.processing().errorDirectory(),
-                        configuration.archive().archiveDirectory(),
-                        configuration.ocr().outputDirectory()),
+                Stream.of(
+        	configuration.batch().inputDirectory(),
+        	configuration.watch().directory(),
+        	configuration.processing().workDirectory(),
+        	configuration.processing().manualReviewDirectory(),
+        	configuration.processing().errorDirectory(),
+        	configuration.archive().archiveDirectory(),
+        	configuration.ocr().outputDirectory())
+        	.collect(Collectors.toCollection(LinkedHashSet::new)),
                 Clock.systemUTC());
         final ReadOnlyApiServer apiServer = new ReadOnlyApiServer(
                 apiConfiguration,
