@@ -52,6 +52,25 @@ class SQLiteProcessingStateRepositoryTest {
         assertThat(repository.findRetriesDueAt(NOW.plusSeconds(60))).hasSize(1);
     }
 
+    @Test
+    void compareAndSetRejectsStaleUpdatedAt() {
+        final SQLiteProcessingStateRepository repository =
+                new SQLiteProcessingStateRepository(tempDirectory.resolve("state.db"));
+        final ProcessingState original = state(ProcessingStatus.RECEIVED, null);
+        repository.save(original);
+        final ProcessingState updated = new ProcessingState(
+                original.processingId(), original.documentId(), original.fileHash(),
+                original.sourceFilename(), original.sourcePath(), ProcessingStatus.OCR_RUNNING,
+                1, null, null, null, null, original.processingStartedAt(), null,
+                null, null, NOW.plusSeconds(1));
+
+        assertThat(repository.compareAndSet(
+                original.processingId(), NOW.minusSeconds(1), updated)).isFalse();
+        assertThat(repository.compareAndSet(original.processingId(), NOW, updated)).isTrue();
+        assertThat(repository.findByProcessingId(original.processingId()).orElseThrow().status())
+                .isEqualTo(ProcessingStatus.OCR_RUNNING);
+    }
+
     private ProcessingState state(final ProcessingStatus status, final Instant nextRetryAt) {
         return new ProcessingState(
                 "processing-id", "document-id", "sha256", "invoice.pdf", "/input/invoice.pdf",

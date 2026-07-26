@@ -568,7 +568,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
     private <T> T readJson(final HttpExchange exchange, final Class<T> type) throws IOException {
         try {
             return objectMapper.readValue(exchange.getRequestBody(), type);
-        } catch (RuntimeException exception) {
+        } catch (IOException | RuntimeException exception) {
             throw new IllegalArgumentException("Invalid JSON request", exception);
         }
     }
@@ -583,7 +583,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
         }
         try {
             return objectMapper.readValue(body, type);
-        } catch (RuntimeException exception) {
+        } catch (IOException | RuntimeException exception) {
             throw new IllegalArgumentException("Invalid JSON request", exception);
         }
     }
