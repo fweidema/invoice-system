@@ -131,7 +131,7 @@ public class InvoiceExportView extends VerticalLayout {
                  | InvoiceExportLimitExceededException exception) {
             showStatus(exception.getMessage(), true);
         } catch (RuntimeException exception) {
-            LOG.error("Invoice export failed in UI", exception);
+            LOG.error("Invoice export failed in UI ({})", exception.getClass().getSimpleName());
             showStatus("Der Export konnte nicht erstellt werden.", true);
         } finally {
             exportButton.setEnabled(true);
