@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.FileTime;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
@@ -67,6 +68,30 @@ class FileReadyDetectorTest {
     }
 
     @Test
+    void waitUntilReadyWaitsForModifiedTimeToBecomeStable() throws Exception {
+        final Path file = tempDirectory.resolve("rechnung.pdf");
+        Files.writeString(file, "pdf");
+        final MutableClock clock = new MutableClock();
+        final FileReadyDetector detector = new FileReadyDetector(
+                configuration(Duration.ofMillis(10), Duration.ofMillis(20), Duration.ofMillis(100)),
+                clock,
+                duration -> {
+                    try {
+                        if (clock.instant().equals(Instant.EPOCH)) {
+                            Files.setLastModifiedTime(file, FileTime.fromMillis(123_456));
+                        }
+                        clock.advance(duration);
+                    } catch (java.io.IOException exception) {
+                        throw new IllegalStateException(exception);
+                    }
+                });
+
+        final boolean ready = detector.waitUntilReady(file);
+
+        assertThat(ready).isTrue();
+    }
+
+    @Test
     void waitUntilReadyRejectsEmptyFile() throws Exception {
         final Path file = tempDirectory.resolve("rechnung.pdf");
         Files.writeString(file, "");
@@ -99,6 +124,19 @@ class FileReadyDetectorTest {
         final boolean ready = detector.waitUntilReady(file);
 
         assertThat(ready).isFalse();
+    }
+
+    @Test
+    void waitUntilReadyRejectsDirectoryAndSymlink() throws Exception {
+        final Path directory = Files.createDirectory(tempDirectory.resolve("directory.pdf"));
+        final Path target = tempDirectory.resolve("target.pdf");
+        Files.writeString(target, "pdf");
+        final Path symlink = Files.createSymbolicLink(tempDirectory.resolve("link.pdf"), target);
+        final MutableClock clock = new MutableClock();
+        final FileReadyDetector detector = detector(clock, Duration.ofMillis(20), Duration.ofMillis(100));
+
+        assertThat(detector.waitUntilReady(directory)).isFalse();
+        assertThat(detector.waitUntilReady(symlink)).isFalse();
     }
 
     @Test

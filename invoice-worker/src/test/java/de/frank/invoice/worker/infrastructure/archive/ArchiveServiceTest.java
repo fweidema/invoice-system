@@ -30,7 +30,7 @@ class ArchiveServiceTest {
     private Path tempDirectory;
 
     @Test
-    void archiveCopiesFileToYearSupplierDirectoryWithExpectedFileName() throws IOException {
+    void archiveMovesFileToYearSupplierDirectoryWithExpectedFileName() throws IOException {
         // Arrange
         final Path sourceFile = sourceFile("invoice.pdf");
         final ArchiveService archiveService = new FileSystemArchiveService(tempDirectory.resolve("archive"));
@@ -47,6 +47,7 @@ class ArchiveServiceTest {
         assertThat(result.archived()).isTrue();
         assertThat(result.archivedFile()).isEqualTo(expectedFile);
         assertThat(Files.exists(expectedFile)).isTrue();
+        assertThat(Files.exists(sourceFile)).isFalse();
     }
 
     @Test
@@ -71,7 +72,9 @@ class ArchiveServiceTest {
         final Path archiveDirectory = tempDirectory.resolve("archive");
         final ArchiveService archiveService = new FileSystemArchiveService(archiveDirectory);
         final Invoice invoice = invoice(sourceFile, "Amazon", "RE-12345");
-        archiveService.archive(invoice.document(), invoice);
+        final Path existingTarget = archiveDirectory.resolve("2026/Amazon/2026-06-27_RE-12345.pdf");
+        Files.createDirectories(existingTarget.getParent());
+        Files.writeString(existingTarget, "existing archive");
 
         // Act
         final ArchiveResult result = archiveService.archive(invoice.document(), invoice);
@@ -83,6 +86,8 @@ class ArchiveServiceTest {
                 .resolve("2026-06-27_RE-12345_1.pdf");
         assertThat(result.archivedFile()).isEqualTo(expectedFile);
         assertThat(Files.exists(expectedFile)).isTrue();
+        assertThat(Files.readString(existingTarget)).isEqualTo("existing archive");
+        assertThat(Files.exists(sourceFile)).isFalse();
     }
 
     @Test
@@ -142,6 +147,22 @@ class ArchiveServiceTest {
         assertThatThrownBy(() -> archiveService.archive(document, null))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("invoice must not be null");
+    }
+
+    @Test
+    void archiveFailureKeepsSourceFile() throws IOException {
+        // Arrange
+        final Path sourceFile = sourceFile("invoice.pdf");
+        final Path unusableArchiveDirectory = tempDirectory.resolve("archive-file");
+        Files.writeString(unusableArchiveDirectory, "not a directory");
+        final ArchiveService archiveService = new FileSystemArchiveService(unusableArchiveDirectory);
+        final Invoice invoice = invoice(sourceFile, "Amazon", "RE-12345");
+
+        // Act / Assert
+        assertThatThrownBy(() -> archiveService.archive(invoice.document(), invoice))
+                .isInstanceOf(ArchiveException.class);
+        assertThat(Files.exists(sourceFile)).isTrue();
+        assertThat(Files.readString(sourceFile)).isEqualTo("invoice content");
     }
 
     private Path sourceFile(final String fileName) throws IOException {

@@ -1,6 +1,7 @@
 package de.frank.invoice.worker.application.watch;
 
 import de.frank.invoice.worker.application.InvoiceWorker;
+import de.frank.invoice.worker.application.archive.ArchiveResult;
 import de.frank.invoice.worker.application.batch.BatchProcessingApplicationService;
 import de.frank.invoice.worker.application.batch.BatchProcessingResult;
 import de.frank.invoice.worker.application.batch.BatchProcessor;
@@ -16,8 +17,11 @@ import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Duration;
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -94,17 +98,79 @@ class WatchServiceRunnerTest {
     }
 
     @Test
-    void runRemembersNotReadyFileAndSkipsRepeatedEvent() throws Exception {
+    void runRetriesNotReadyFileOnLaterEvent() throws Exception {
         final Path file = tempDirectory.resolve("growing.pdf");
         Files.writeString(file, "pdf");
         final TestInvoiceWorker invoiceWorker = new TestInvoiceWorker();
         final TestDirectoryWatcher watcher = new TestDirectoryWatcher(List.of(file, file));
+        final WatchConfiguration configuration = configuration(false);
+        final FileReadyDetector detector = new SequencedFileReadyDetector(configuration, false, true);
 
-        final int exitCode = runner(invoiceWorker, watcher, false, false).run();
+        final int exitCode = new WatchServiceRunner(
+                invoiceWorker,
+                configuration,
+                detector,
+                watcher,
+                Clock.systemUTC()).run();
+
+        assertThat(exitCode).isZero();
+        assertThat(invoiceWorker.processedNames()).containsExactly("growing.pdf");
+        assertThat(((SequencedFileReadyDetector) detector).checkCount()).isEqualTo(2);
+    }
+
+    @Test
+    void runRetriesAfterFailedProcessingResult() throws Exception {
+        final Path file = tempDirectory.resolve("retry.pdf");
+        Files.writeString(file, "pdf");
+        final TestInvoiceWorker invoiceWorker = new TestInvoiceWorker(null, 1);
+        final TestDirectoryWatcher watcher = new TestDirectoryWatcher(List.of(file, file));
+
+        final int exitCode = runner(invoiceWorker, watcher, false, true).run();
+
+        assertThat(exitCode).isZero();
+        assertThat(invoiceWorker.processedNames()).containsExactly("retry.pdf", "retry.pdf");
+        assertThat(Files.exists(file)).isFalse();
+    }
+
+    @Test
+    void runIgnoresHiddenTemporaryAndNonPdfStartupFiles() throws Exception {
+        Files.writeString(tempDirectory.resolve(".hidden.pdf"), "pdf");
+        Files.writeString(tempDirectory.resolve("~temporary.pdf"), "pdf");
+        Files.writeString(tempDirectory.resolve("notes.txt"), "text");
+        final TestInvoiceWorker invoiceWorker = new TestInvoiceWorker();
+
+        final int exitCode = runner(
+                invoiceWorker,
+                new TestDirectoryWatcher(List.of()),
+                true,
+                true).run();
 
         assertThat(exitCode).isZero();
         assertThat(invoiceWorker.processedNames()).isEmpty();
     }
+
+    @Test
+    void runPreventsParallelProcessingOfSameFile() throws Exception {
+        final Path file = tempDirectory.resolve("parallel.pdf");
+        Files.writeString(file, "pdf");
+        final BlockingInvoiceWorker invoiceWorker = new BlockingInvoiceWorker();
+        final ParallelDirectoryWatcher watcher = new ParallelDirectoryWatcher(
+                file,
+                invoiceWorker.processingStarted,
+                invoiceWorker.parallelEventHandled);
+
+        final int exitCode = new WatchServiceRunner(
+                invoiceWorker,
+                configuration(false),
+                new TestFileReadyDetector(configuration(false), true),
+                watcher,
+                Clock.systemUTC()).run();
+
+        assertThat(exitCode).isZero();
+        assertThat(invoiceWorker.processCount()).isOne();
+        assertThat(Files.exists(file)).isFalse();
+    }
+
     @Test
     void requestShutdownClosesWatcher() {
         final TestInvoiceWorker invoiceWorker = new TestInvoiceWorker();
@@ -132,8 +198,27 @@ class WatchServiceRunnerTest {
         return new WatchServiceRunner(invoiceWorker, configuration, detector, watcher, Clock.systemUTC());
     }
 
-    private static DocumentProcessingResult result(final boolean successful) {
-        return new DocumentProcessingResult(successful, successful, "message", null, null, List.of(), null);
+    private WatchConfiguration configuration(final boolean processExisting) {
+        return new WatchConfiguration(
+                tempDirectory,
+                Duration.ofMillis(1),
+                Duration.ofMillis(1),
+                Duration.ofMillis(10),
+                Duration.ofSeconds(1),
+                processExisting);
+    }
+
+    private static DocumentProcessingResult result(
+            final boolean successful,
+            final ArchiveResult archiveResult) {
+        return new DocumentProcessingResult(
+                successful,
+                successful,
+                "message",
+                null,
+                archiveResult,
+                List.of(),
+                null);
     }
 
     private static final class TestDirectoryWatcher implements DirectoryWatcher {
@@ -175,18 +260,101 @@ class WatchServiceRunnerTest {
         }
     }
 
+    private static final class ParallelDirectoryWatcher implements DirectoryWatcher {
+
+        private final Path file;
+        private final CountDownLatch processingStarted;
+        private final CountDownLatch parallelEventHandled;
+
+        private ParallelDirectoryWatcher(
+                final Path file,
+                final CountDownLatch processingStarted,
+                final CountDownLatch parallelEventHandled) {
+            this.file = file;
+            this.processingStarted = processingStarted;
+            this.parallelEventHandled = parallelEventHandled;
+        }
+
+        @Override
+        public void watch(final Consumer<Path> fileConsumer) {
+            final Thread firstEvent = new Thread(() -> fileConsumer.accept(file));
+            final Thread secondEvent = new Thread(() -> {
+                await(processingStarted);
+                fileConsumer.accept(file);
+                parallelEventHandled.countDown();
+            });
+            firstEvent.start();
+            secondEvent.start();
+            join(secondEvent);
+            join(firstEvent);
+        }
+
+        @Override
+        public void close() {
+        }
+
+        private static void await(final CountDownLatch latch) {
+            try {
+                if (!latch.await(1, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting for processing");
+                }
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            }
+        }
+
+        private static void join(final Thread thread) {
+            try {
+                thread.join(2_000);
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            }
+        }
+    }
+
+    private static final class SequencedFileReadyDetector extends FileReadyDetector {
+
+        private final boolean[] readiness;
+        private final AtomicInteger checkCount = new AtomicInteger();
+
+        private SequencedFileReadyDetector(
+                final WatchConfiguration configuration,
+                final boolean... readiness) {
+            super(configuration, Clock.systemUTC(), duration -> { });
+            this.readiness = readiness;
+        }
+
+        @Override
+        public boolean waitUntilReady(final Path file) {
+            final int index = checkCount.getAndIncrement();
+            return readiness[Math.min(index, readiness.length - 1)];
+        }
+
+        private int checkCount() {
+            return checkCount.get();
+        }
+    }
+
     private static final class TestInvoiceWorker extends InvoiceWorker {
 
-        private final List<Path> processed = new ArrayList<>();
+        private final List<Path> processed = new CopyOnWriteArrayList<>();
         private final String failingName;
+        private int unsuccessfulResultsRemaining;
 
         private TestInvoiceWorker() {
-            this(null);
+            this(null, 0);
         }
 
         private TestInvoiceWorker(final String failingName) {
+            this(failingName, 0);
+        }
+
+        private TestInvoiceWorker(final String failingName, final int unsuccessfulResults) {
             super(new BatchProcessingApplicationService(new DocumentImporter(), new TestBatchProcessor()));
             this.failingName = failingName;
+            this.unsuccessfulResultsRemaining = unsuccessfulResults;
         }
 
         @Override
@@ -195,11 +363,55 @@ class WatchServiceRunnerTest {
             if (document.getFileName().toString().equals(failingName)) {
                 throw new IllegalStateException("failed");
             }
-            return result(true);
+            if (unsuccessfulResultsRemaining > 0) {
+                unsuccessfulResultsRemaining--;
+                return result(false, null);
+            }
+            try {
+                final Path archivedFile = document.resolveSibling("archive-" + document.getFileName());
+                Files.move(document, archivedFile);
+                return result(true, new ArchiveResult(true, archivedFile, "archived"));
+            } catch (java.io.IOException exception) {
+                throw new IllegalStateException(exception);
+            }
         }
 
         private List<String> processedNames() {
             return processed.stream().map(path -> path.getFileName().toString()).toList();
+        }
+    }
+
+    private static final class BlockingInvoiceWorker extends InvoiceWorker {
+
+        private final CountDownLatch processingStarted = new CountDownLatch(1);
+        private final CountDownLatch parallelEventHandled = new CountDownLatch(1);
+        private final AtomicInteger processCount = new AtomicInteger();
+
+        private BlockingInvoiceWorker() {
+            super(new BatchProcessingApplicationService(new DocumentImporter(), new TestBatchProcessor()));
+        }
+
+        @Override
+        public DocumentProcessingResult processDocument(final Path document) {
+            processCount.incrementAndGet();
+            processingStarted.countDown();
+            try {
+                if (!parallelEventHandled.await(1, TimeUnit.SECONDS)) {
+                    throw new IllegalStateException("Timed out waiting for parallel event");
+                }
+                final Path archivedFile = document.resolveSibling("archive-" + document.getFileName());
+                Files.move(document, archivedFile);
+                return result(true, new ArchiveResult(true, archivedFile, "archived"));
+            } catch (InterruptedException exception) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException(exception);
+            } catch (java.io.IOException exception) {
+                throw new IllegalStateException(exception);
+            }
+        }
+
+        private int processCount() {
+            return processCount.get();
         }
     }
 
@@ -211,7 +423,7 @@ class WatchServiceRunnerTest {
 
         @Override
         public BatchProcessingResult process(final List<Document> documents) {
-            return new BatchProcessingResult(0, 0, 0, List.of(result(true)), Duration.ZERO);
+            return new BatchProcessingResult(0, 0, 0, List.of(result(false, null)), Duration.ZERO);
         }
     }
 }
