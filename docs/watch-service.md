@@ -13,7 +13,10 @@ NIO WatchService
   -> bestehender BatchProcessor und DocumentProcessingWorkflow
 ```
 
-Die Verarbeitung bleibt sequenziell. Ein Dokumentfehler wird geloggt, stoppt den Watch-Service aber nicht.
+Die normale NIO-Verarbeitung bleibt sequenziell. Ein zusaetzlicher atomarer
+In-Progress-Schutz verhindert auch bei parallelen oder mehrfachen Events, dass
+derselbe normalisierte absolute Pfad gleichzeitig verarbeitet wird. Ein
+Dokumentfehler wird geloggt, stoppt den Watch-Service aber nicht.
 
 ## CLI
 
@@ -59,6 +62,10 @@ Die Prioritaet bleibt: Defaults, Profil, Properties, Environment, CLI.
 
 ## Dateistabilitaet
 
+Eine PDF darf direkt unter ihrem endgueltigen Namen, beispielsweise
+`rechnung.pdf`, in das Eingangsverzeichnis kopiert werden. Ein temporärer Name
+mit anschliessendem manuellen Umbenennen ist nicht erforderlich.
+
 Vor der Verarbeitung prueft `FileReadyDetector`:
 
 - Datei existiert, ist regulaer und kein Symlink.
@@ -70,6 +77,13 @@ Vor der Verarbeitung prueft `FileReadyDetector`:
 
 Zwischen den Pruefungen wird `watch.pollInterval` verwendet; es wird nicht nur pauschal geschlafen.
 
+Ist eine Datei innerhalb von `watch.maxWaitTime` noch nicht bereit, wird das
+aktuelle Event zurueckgestellt, aber nicht als verarbeitet dedupliziert. Ein
+spaeteres `ENTRY_MODIFY`-Event startet deshalb eine neue Bereitschaftspruefung.
+Erst ein vollstaendig erfolgreicher Workflow mit bestaetigter Archivierung,
+vorhandener Archivdatei und entfernter Quelldatei wird fuer maximal zehn Minuten
+dedupliziert. Der Cache bleibt auf 512 Eintraege begrenzt.
+
 ## Dateifilter
 
 Verarbeitet werden sichtbare PDF-Dateien wie `rechnung.pdf`, `RECHNUNG.PDF` und `scan.Pdf`.
@@ -78,11 +92,22 @@ Ignoriert werden unter anderem `.tmp`, `.part`, `.crdownload`, versteckte Dateie
 
 ## Bestehende Dateien
 
-Wenn `watch.processExistingFilesOnStartup=true` gesetzt ist, verarbeitet der Service vorhandene PDFs beim Start nach Dateiname sortiert und wechselt danach in den normalen Watch-Modus. Bei `false` werden nur neue Events verarbeitet.
+Wenn `watch.processExistingFilesOnStartup=true` gesetzt ist, prueft und
+verarbeitet der Service vorhandene PDFs beim Start nach Dateiname sortiert. Bei
+erfolgreicher Archivierung werden sie aus dem Eingangsverzeichnis verschoben;
+danach wechselt der Service in den normalen Watch-Modus. Bei `false` werden nur
+neue Events verarbeitet.
 
 ## Fehlerverhalten
 
-OCR-, AI-, Validierungs-, Persistenz- und Archivierungsfehler werden pro Dokument geloggt. Der Service startet dadurch keine Endlosschleife fuer dieselbe Datei und verarbeitet danach das naechste Dokument. Wenn das Watch-Verzeichnis fehlt oder der Watch-Key ungueltig wird, endet der Watch-Modus mit Exit-Code 1.
+OCR-, AI-, Validierungs-, Persistenz- und Archivierungsfehler werden pro Dokument
+geloggt. Nur die erfolgreiche Archivierung verschiebt die Quelldatei. Bei einem
+Verarbeitungs- oder Archivierungsfehler bleibt sie im Eingangsverzeichnis, sofern
+der fehlgeschlagene Workflow sie nicht unerwartet entfernt hat; auch dieser
+inkonsistente Zustand wird explizit geloggt. Fehlgeschlagene Dateien werden nicht
+als erfolgreich dedupliziert und koennen durch ein spaeteres Modify-Event erneut
+geprueft werden. Wenn das Watch-Verzeichnis fehlt oder der Watch-Key ungueltig
+wird, endet der Watch-Modus mit Exit-Code 1.
 
 ## Shutdown
 
@@ -112,7 +137,12 @@ cp invoice-worker/src/test/resources/documents/fake_scan_rechnung_01.pdf runtime
 docker compose logs -f invoice-worker-watch
 ```
 
-Erwartung: Datei wird erkannt, Stabilitaet wird geprueft, Verarbeitung startet, SQLite wird aktualisiert, das Dokument wird archiviert und der Service laeuft weiter. Danach eine zweite Fake-Datei testen. Eine leere oder ungueltige PDF darf den Service nicht stoppen.
+Erwartung: Die PDF wird direkt unter ihrem `.pdf`-Namen erkannt, ihre Stabilitaet
+wird geprueft, die Verarbeitung startet, SQLite wird aktualisiert und das
+Dokument wird in `runtime/archive` verschoben. Nach dem Erfolg darf die Datei
+nicht mehr in `runtime/input` liegen. Danach eine zweite Fake-Datei testen. Eine
+leere oder ungueltige PDF darf den Service nicht stoppen oder kommentarlos
+geloescht werden.
 
 Shutdown:
 

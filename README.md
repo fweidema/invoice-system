@@ -160,6 +160,15 @@ $env:OPENAI_API_KEY = "..."
 
 Die vollstaendige Konfigurationsreferenz steht in [docs/configuration.md](docs/configuration.md). Der dauerhafte Watch-Betrieb ist in [docs/watch-service.md](docs/watch-service.md) beschrieben. Weitere OpenAI-Hinweise stehen in [docs/openai-configuration.md](docs/openai-configuration.md). Der kontrollierte Ein-Dokument-Test fuer echten OpenAI-Betrieb ist in [docs/openai-end-to-end-test.md](docs/openai-end-to-end-test.md) beschrieben.
 
+PDFs koennen direkt unter ihrem endgueltigen `.pdf`-Dateinamen in das konfigurierte
+Watch-Eingangsverzeichnis kopiert werden. Der Watch-Service wartet automatisch auf
+eine ueber `watch.stableTime` unveraenderte Datei; ein vorheriges Umbenennen ist
+nicht erforderlich. Nach erfolgreicher Verarbeitung wird die Quelldatei in das
+Archiv verschoben und verbleibt nicht im Eingangsverzeichnis. Schlaegt die
+Verarbeitung oder Archivierung fehl, wird die Quelldatei nicht kommentarlos
+geloescht. Versteckte Namen, Namen mit fuehrendem `~`, Nicht-PDF-Dateien,
+Verzeichnisse, Symlinks und leere Dateien werden nicht verarbeitet.
+
 ## Projektstruktur
 
 ```text
