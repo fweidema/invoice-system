@@ -39,6 +39,15 @@ ocr.language=deu
 ocr.outputDirectory=ocr
 
 logging.level=INFO
+
+api.host=127.0.0.1
+api.port=8080
+api.shutdownTimeout=10s
+
+ui.host=127.0.0.1
+ui.port=8081
+ui.shutdownTimeout=10s
+ui.maximumExportInvoices=10000
 ```
 
 ## Umgebungsvariablen
@@ -56,6 +65,13 @@ INVOICE_WATCH_STABLE_TIME
 INVOICE_WATCH_MAX_WAIT_TIME
 INVOICE_WATCH_SHUTDOWN_TIMEOUT
 INVOICE_WATCH_PROCESS_EXISTING
+INVOICE_API_HOST
+INVOICE_API_PORT
+INVOICE_API_SHUTDOWN_TIMEOUT
+INVOICE_UI_HOST
+INVOICE_UI_PORT
+INVOICE_UI_SHUTDOWN_TIMEOUT
+INVOICE_UI_MAXIMUM_EXPORT_INVOICES
 INVOICE_OCR_COMMAND
 INVOICE_OCR_LANGUAGE
 INVOICE_OCR_OUTPUT_DIRECTORY
@@ -79,6 +95,7 @@ java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --conf
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile test
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile production --config config/application.properties
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar watch --profile production --config config/application.properties
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar ui --profile production --config config/application.properties
 ```
 
 PowerShell:
@@ -115,6 +132,11 @@ watch.processExistingFilesOnStartup=true
 
 archive.directory=/srv/invoice-system/archive
 persistence.databaseFile=/srv/invoice-system/data/invoice-system.db
+
+ui.host=0.0.0.0
+ui.port=8081
+ui.shutdownTimeout=10s
+ui.maximumExportInvoices=10000
 
 ocr.command=ocrmypdf
 ocr.language=deu

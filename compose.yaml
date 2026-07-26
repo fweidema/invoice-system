@@ -91,3 +91,35 @@ services:
       timeout: 5s
       retries: 3
       start_period: 20s
+
+  invoice-worker-ui:
+    profiles:
+      - ui
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    command:
+      - ui
+      - --profile
+      - production
+      - --config
+      - /config/application.properties
+    restart: unless-stopped
+    stop_grace_period: 15s
+    mem_limit: 768m
+    ports:
+      - "${INVOICE_UI_PORT:-8081}:8081"
+    volumes:
+      - ./runtime/database:/data/database
+      - ./runtime/logs:/data/logs
+      - ./docker/application.properties:/config/application.properties:ro
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8081/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s

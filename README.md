@@ -87,6 +87,7 @@ Grundform:
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process [--input <path>] [--config <path>] [--profile <default|test|production>] [--skip-ocr] [--mock-text]
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar watch [--input <path>] [--config <path>] [--profile <default|test|production>] [--skip-ocr] [--mock-text]
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar serve [--config <path>] [--profile <default|test|production>]
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar ui [--config <path>] [--profile <default|test|production>]
 ```
 
 Beispiele:
@@ -97,6 +98,7 @@ java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --prof
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --profile production --config config/application.properties
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar watch --profile production --config config/application.properties
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar serve --profile production --config config/application.properties
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar ui --profile production --config config/application.properties
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input --skip-ocr
 java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --input input --skip-ocr --mock-text
 ```
@@ -124,6 +126,23 @@ GET /api/processing-history/{documentId}
 ```
 
 Die Listen-Endpunkte liefern ein Page-Objekt mit `items`, `page`, `size`, `totalElements`, `totalPages`, `sort` und `direction`. Filterwerte werden serverseitig in SQLite angewendet; Sortierfelder sind fest validiert. Das Dashboard aktualisiert die Daten alle 60 Sekunden ohne vollstaendigen Seiten-Reload, bietet je Liste Seitengroessen von 10, 25, 50 und 100 und nutzt bewusst Select-Felder fuer Sortierung und Richtung, damit die vorhandene Formularsteuerung konsistent bleibt. Es bietet keine Schreib-, Loesch- oder Downloadfunktionen und zeigt keine internen Dateipfade an.
+
+## Rechnungsdatenexport
+
+Das Kommando `ui` startet die browserbasierte Vaadin-Oberflaeche unter
+`http://localhost:8081`. Rechnungen koennen nach Rechnungsdatum, Lieferant und
+Kategorie gefiltert und als Excel- (`.xlsx`) oder semikolongetrennte CSV-Datei
+heruntergeladen werden. Der Export ist rein lesend; die View verwendet
+ausschliesslich den Application Service `InvoiceExportService`.
+
+```bash
+java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar ui
+docker compose --profile ui up -d invoice-worker-ui
+```
+
+Details zu Spalten, Formaten, Matching, Parallelbetrieb und manueller Abnahme
+stehen in [docs/invoice-export-ui.md](docs/invoice-export-ui.md).
+
 ## Konfiguration
 
 Die aktuelle Konfiguration wird Properties-basiert geladen. Wichtige Defaults:
@@ -212,9 +231,10 @@ docker compose run --rm invoice-worker
 # dauerhaft, optionale Compose-Profile
 docker compose --profile watch up -d invoice-worker-watch
 docker compose --profile api up -d invoice-worker-api
+docker compose --profile ui up -d invoice-worker-ui
 ```
 
-Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil veroeffentlicht standardmaessig Port `8080`, ueberschreibbar mit `INVOICE_API_PORT`. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
+Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil veroeffentlicht standardmaessig Port `8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil nutzt entsprechend Port `8081` und `INVOICE_UI_PORT`. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
 
 Details stehen in [docs/vps-deployment.md](docs/vps-deployment.md), Backup-Hinweise in [docs/backup-and-restore.md](docs/backup-and-restore.md). Fuer Sprint-027-Protokolle ohne Secrets und ohne private Daten steht [docs/test-reports/openai-e2e-template.md](docs/test-reports/openai-e2e-template.md) bereit.
 

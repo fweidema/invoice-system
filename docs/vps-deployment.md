@@ -89,6 +89,35 @@ Die Compose-Datei definiert Healthchecks fuer alle Services:
 
 - `invoice-worker` und `invoice-worker-watch` fuehren `/app/container-self-check.sh` aus. Dieser prueft Werkzeuge, Konfiguration und Schreibrechte, verarbeitet aber keine Rechnungen.
 - `invoice-worker-api` prueft `GET /api/health` innerhalb des Containers.
+- `invoice-worker-ui` prueft `GET /health`; der Endpunkt liest keine Rechnungen
+  und startet keinen Export.
+
+## Optionale Export-UI
+
+Die Exportoberflaeche wird nur mit dem Compose-Profil `ui` gestartet:
+
+```bash
+docker compose --profile ui up -d invoice-worker-ui
+docker compose --profile ui ps
+docker compose --profile ui logs -f invoice-worker-ui
+```
+
+Standardmaessig wird Host-Port `8081` veroeffentlicht. Eine abweichende
+Host-Belegung erfolgt mit `INVOICE_UI_PORT`; der Container-Port bleibt `8081`.
+Der Datenbank-Mount ist absichtlich schreibbar: Auch ein lesender SQLite-Client
+benoetigt im WAL-Betrieb Zugriff auf `-wal`/`-shm` und darf deshalb nicht auf
+einen read-only Mount gezwungen werden. UID/GID `10001` benoetigt Schreibrechte
+auf `runtime/database/`.
+
+Watch und UI koennen parallel gegen dieselbe Datenbank laufen:
+
+```bash
+docker compose --profile watch --profile ui up -d \
+  invoice-worker-watch invoice-worker-ui
+```
+
+SQLite-Verbindungen aktivieren einheitlich WAL, Foreign Keys und einen
+Busy-Timeout von 5 Sekunden. Exporte halten keine schreibende Transaktion offen.
 
 Vor einem VPS-Update lokal ausfuehren:
 
@@ -168,7 +197,7 @@ Der produktive VPS wird nicht automatisch durch Codex aktualisiert. Fuer einen s
 ## Sicherheit
 
 - Container laeuft als Benutzer `invoice` mit UID/GID `10001`.
-- Keine veroeffentlichten Ports.
+- Ports werden nur fuer explizit aktivierte API-/UI-Profile veroeffentlicht.
 - Kein privileged mode.
 - Kein Docker-Socket-Mount.
 - Kein Host-Netzwerk.
@@ -176,4 +205,4 @@ Der produktive VPS wird nicht automatisch durch Codex aktualisiert. Fuer einen s
 - `docker/application.properties` wird read-only gemountet.
 - `no-new-privileges:true` ist gesetzt.
 - Linux-Capabilities werden per `cap_drop: [ALL]` entfernt.
-- Kein REST-Endpunkt und keine Web UI.
+- Batch und Watch stellen weder REST-Endpunkt noch Web UI bereit.

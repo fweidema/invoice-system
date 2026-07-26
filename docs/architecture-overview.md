@@ -103,6 +103,21 @@ Der Workflow arbeitet ausschliesslich mit `AiClient`. OpenAI-spezifischer HTTP-,
 - OCR-Texte, OpenAI-Antworten und Rechnungsdaten werden nicht vollstaendig geloggt.
 - Persistenz und Archivierung sind Infrastrukturadapter hinter Application-Ports.
 
+## Export-UI
+
+```text
+Browser -> Vaadin View -> InvoiceExportService -> InvoiceRepository -> SQLite
+                              |
+                              +-> CsvInvoiceExporter
+                              `-> ExcelInvoiceExporter
+```
+
+Die Vaadin-Schicht erhaelt ausschliesslich `InvoiceExportService` ueber die
+Vaadin-Session. Sie kennt keine Repository-, JDBC- oder SQLite-Klassen.
+CSV- und XLSX-Erzeugung sind Infrastrukturkomponenten hinter dem
+Application-Interface `InvoiceExporter`; der koordinierende Service bleibt
+vollstaendig Vaadin-unabhaengig.
+
 ## Watch-Service
 
 Der Watch-Service liegt in pplication.watch und infrastructure.watch. Er nutzt Java NIO WatchService, prueft Dateistabilitaet und delegiert einzelne Dokumente an InvoiceWorker.processDocument(Path). Die Workflow-Fachlogik bleibt im bestehenden DocumentProcessingWorkflow. Details stehen in [watch-service.md](watch-service.md).
