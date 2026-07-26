@@ -62,7 +62,7 @@ public class FileSystemArchiveService implements ArchiveService {
         final Path targetFile = uniqueTargetFile(targetDirectory, fileName(invoice));
         try {
             Files.createDirectories(targetDirectory);
-            Files.copy(sourceFile, targetFile);
+            Files.move(sourceFile, targetFile);
             return new ArchiveResult(true, targetFile, "Document archived successfully.");
         } catch (IOException exception) {
             throw new ArchiveException("Could not archive document: " + sourceFile, exception);
