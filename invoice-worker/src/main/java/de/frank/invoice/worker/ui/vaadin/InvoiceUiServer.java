@@ -14,6 +14,9 @@ import org.apache.catalina.Wrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import de.frank.invoice.worker.ui.vaadin.views.export.InvoiceExportView;
+import de.frank.invoice.worker.ui.vaadin.manualreview.HttpManualReviewApi;
+import de.frank.invoice.worker.ui.vaadin.manualreview.ManualReviewApi;
+import de.frank.invoice.worker.ui.vaadin.views.manualreview.ManualReviewView;
 
 import java.nio.file.Path;
 import java.util.Objects;
@@ -28,6 +31,7 @@ public class InvoiceUiServer implements AutoCloseable {
 
     private final UiConfiguration configuration;
     private final InvoiceExportService invoiceExportService;
+    private final ManualReviewApi manualReviewApi;
     private final Tomcat tomcat = new Tomcat();
     private volatile boolean started;
 
@@ -43,6 +47,17 @@ public class InvoiceUiServer implements AutoCloseable {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.invoiceExportService = Objects.requireNonNull(
                 invoiceExportService, "invoiceExportService must not be null");
+        this.manualReviewApi = new HttpManualReviewApi(configuration.manualReviewApiBaseUri());
+    }
+
+    InvoiceUiServer(
+            final UiConfiguration configuration,
+            final InvoiceExportService invoiceExportService,
+            final ManualReviewApi manualReviewApi) {
+        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
+        this.invoiceExportService = Objects.requireNonNull(
+                invoiceExportService, "invoiceExportService must not be null");
+        this.manualReviewApi = Objects.requireNonNull(manualReviewApi, "manualReviewApi must not be null");
     }
 
     /**
@@ -118,11 +133,13 @@ public class InvoiceUiServer implements AutoCloseable {
         configureStaticResourceMimeMappings(context);
         context.addServletContainerInitializer(new LookupServletContainerInitializer(), Set.of());
         context.addServletContainerInitializer(
-                new RouteRegistryInitializer(), Set.of(InvoiceExportView.class));
+                new RouteRegistryInitializer(), Set.of(InvoiceExportView.class, ManualReviewView.class));
         context.addServletContainerInitializer(
                 new VaadinAppShellInitializer(), Set.of(InvoiceUiAppShell.class));
         context.getServletContext().setAttribute(
                 InvoiceUiServlet.EXPORT_SERVICE_ATTRIBUTE, invoiceExportService);
+        context.getServletContext().setAttribute(
+                InvoiceUiServlet.MANUAL_REVIEW_API_ATTRIBUTE, manualReviewApi);
 
         final Wrapper health = Tomcat.addServlet(context, "ui-health", new UiHealthServlet());
         health.setLoadOnStartup(1);

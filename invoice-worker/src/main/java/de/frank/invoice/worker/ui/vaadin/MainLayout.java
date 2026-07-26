@@ -5,6 +5,7 @@ import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
 import de.frank.invoice.worker.ui.vaadin.views.export.InvoiceExportView;
+import de.frank.invoice.worker.ui.vaadin.views.manualreview.ManualReviewView;
 
 /**
  * Main navigation layout for browser-based invoice tools.
@@ -21,6 +22,7 @@ public class MainLayout extends AppLayout {
 
         final SideNav navigation = new SideNav();
         navigation.addItem(new SideNavItem("Rechnungen exportieren", InvoiceExportView.class));
+        navigation.addItem(new SideNavItem("Manual Review", ManualReviewView.class));
         addToDrawer(navigation);
     }
 }
