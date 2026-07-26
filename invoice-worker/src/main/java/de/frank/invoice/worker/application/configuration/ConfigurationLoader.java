@@ -32,6 +32,10 @@ public class ConfigurationLoader {
     public static final String API_HOST = "api.host";
     public static final String API_PORT = "api.port";
     public static final String API_SHUTDOWN_TIMEOUT = "api.shutdownTimeout";
+    public static final String UI_HOST = "ui.host";
+    public static final String UI_PORT = "ui.port";
+    public static final String UI_SHUTDOWN_TIMEOUT = "ui.shutdownTimeout";
+    public static final String UI_MAXIMUM_EXPORT_INVOICES = "ui.maximumExportInvoices";
     public static final String LOGGING_LEVEL = "logging.level";
 
     private static final Map<String, String> ENVIRONMENT_MAPPING = Map.ofEntries(
@@ -50,6 +54,10 @@ public class ConfigurationLoader {
             Map.entry("INVOICE_API_HOST", API_HOST),
             Map.entry("INVOICE_API_PORT", API_PORT),
             Map.entry("INVOICE_API_SHUTDOWN_TIMEOUT", API_SHUTDOWN_TIMEOUT),
+            Map.entry("INVOICE_UI_HOST", UI_HOST),
+            Map.entry("INVOICE_UI_PORT", UI_PORT),
+            Map.entry("INVOICE_UI_SHUTDOWN_TIMEOUT", UI_SHUTDOWN_TIMEOUT),
+            Map.entry("INVOICE_UI_MAXIMUM_EXPORT_INVOICES", UI_MAXIMUM_EXPORT_INVOICES),
             Map.entry("INVOICE_OCR_COMMAND", OCR_COMMAND),
             Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
             Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
@@ -161,6 +169,11 @@ public class ConfigurationLoader {
         properties.setProperty(API_HOST, "127.0.0.1");
         properties.setProperty(API_PORT, "8080");
         properties.setProperty(API_SHUTDOWN_TIMEOUT, "10s");
+        properties.setProperty(UI_HOST, "127.0.0.1");
+        properties.setProperty(UI_PORT, "8081");
+        properties.setProperty(UI_SHUTDOWN_TIMEOUT, "10s");
+        properties.setProperty(UI_MAXIMUM_EXPORT_INVOICES,
+                Integer.toString(UiConfiguration.DEFAULT_MAXIMUM_EXPORT_INVOICES));
         properties.setProperty(LOGGING_LEVEL, LoggingConfiguration.DEFAULT_LEVEL);
         return properties;
     }
@@ -174,6 +187,7 @@ public class ConfigurationLoader {
                 batch(properties),
                 watch(properties),
                 api(properties),
+                ui(properties),
                 logging(properties));
     }
 
@@ -233,6 +247,15 @@ public class ConfigurationLoader {
                 durationParser.parse(text(properties, API_SHUTDOWN_TIMEOUT), API_SHUTDOWN_TIMEOUT));
     }
 
+    private UiConfiguration ui(final Properties properties) {
+        final DurationParser durationParser = new DurationParser();
+        return new UiConfiguration(
+                text(properties, UI_HOST),
+                port(properties, UI_PORT),
+                durationParser.parse(text(properties, UI_SHUTDOWN_TIMEOUT), UI_SHUTDOWN_TIMEOUT),
+                positiveInteger(properties, UI_MAXIMUM_EXPORT_INVOICES));
+    }
+
     private LoggingConfiguration logging(final Properties properties) {
         return new LoggingConfiguration(text(properties, LOGGING_LEVEL));
     }
@@ -252,6 +275,19 @@ public class ConfigurationLoader {
             return Integer.parseInt(value);
         } catch (NumberFormatException exception) {
             throw new IllegalArgumentException("Configuration property must be a valid port: " + key, exception);
+        }
+    }
+
+    private int positiveInteger(final Properties properties, final String key) {
+        final String value = text(properties, key);
+        try {
+            final int parsedValue = Integer.parseInt(value);
+            if (parsedValue < 1) {
+                throw new IllegalArgumentException("Configuration property must be positive: " + key);
+            }
+            return parsedValue;
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException("Configuration property must be a valid integer: " + key, exception);
         }
     }
 

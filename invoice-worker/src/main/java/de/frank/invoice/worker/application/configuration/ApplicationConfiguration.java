@@ -14,6 +14,7 @@ import java.util.Objects;
  * @param batch batch processing configuration
  * @param watch watch service configuration
  * @param api read-only API configuration
+ * @param ui browser export UI configuration
  * @param logging logging configuration
  */
 public record ApplicationConfiguration(
@@ -24,6 +25,7 @@ public record ApplicationConfiguration(
         BatchConfiguration batch,
         WatchConfiguration watch,
         ApiConfiguration api,
+        UiConfiguration ui,
         LoggingConfiguration logging) {
 
     /**
@@ -49,7 +51,23 @@ public record ApplicationConfiguration(
                 batch,
                 defaultWatchConfiguration(),
                 defaultApiConfiguration(),
+                defaultUiConfiguration(),
                 new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL));
+    }
+
+    /**
+     * Compatibility constructor for configurations created before UI support.
+     */
+    public ApplicationConfiguration(
+            final ArchiveConfiguration archive,
+            final PersistenceConfiguration persistence,
+            final OcrConfiguration ocr,
+            final AiConfiguration ai,
+            final BatchConfiguration batch,
+            final WatchConfiguration watch,
+            final ApiConfiguration api,
+            final LoggingConfiguration logging) {
+        this(archive, persistence, ocr, ai, batch, watch, api, defaultUiConfiguration(), logging);
     }
 
     /**
@@ -63,6 +81,7 @@ public record ApplicationConfiguration(
         Objects.requireNonNull(batch, "batch must not be null");
         Objects.requireNonNull(watch, "watch must not be null");
         Objects.requireNonNull(api, "api must not be null");
+        Objects.requireNonNull(ui, "ui must not be null");
         Objects.requireNonNull(logging, "logging must not be null");
     }
 
@@ -78,5 +97,13 @@ public record ApplicationConfiguration(
 
     private static ApiConfiguration defaultApiConfiguration() {
         return new ApiConfiguration("127.0.0.1", 8080, Duration.ofSeconds(10));
+    }
+
+    private static UiConfiguration defaultUiConfiguration() {
+        return new UiConfiguration(
+                "127.0.0.1",
+                8081,
+                Duration.ofSeconds(10),
+                UiConfiguration.DEFAULT_MAXIMUM_EXPORT_INVOICES);
     }
 }

@@ -114,7 +114,13 @@ public class InvoiceWorkerCli {
             case PROCESS -> runProcess(parsedOptions);
             case WATCH -> runWatch(parsedOptions);
             case SERVE -> runServe();
+            case UI -> runUi();
         };
+    }
+
+    private int runUi() {
+        err.println("UI mode must be started through InvoiceWorkerApplication.");
+        return EXIT_ERROR;
     }
 
     /**

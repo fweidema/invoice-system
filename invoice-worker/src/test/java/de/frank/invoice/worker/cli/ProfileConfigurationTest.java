@@ -47,6 +47,13 @@ class ProfileConfigurationTest {
     }
 
     @Test
+    void uiCommandIsAccepted() {
+        final CliOptions options = CliOptions.parse(new String[]{"ui"});
+
+        assertThat(options.command()).isEqualTo(CliCommand.UI);
+    }
+
+    @Test
     void explicitCliOptionsOverrideProfile() {
         final CliOptions options = CliOptions.parse(new String[]{"process", "--profile", "production", "--config", "application.properties", "--skip-ocr", "--mock-text"});
 

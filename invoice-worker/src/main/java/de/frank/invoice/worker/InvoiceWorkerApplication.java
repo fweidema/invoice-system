@@ -6,6 +6,7 @@ import de.frank.invoice.worker.application.configuration.ApiConfiguration;
 import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
 import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
 import de.frank.invoice.worker.application.configuration.WatchConfiguration;
+import de.frank.invoice.worker.application.export.DefaultInvoiceExportService;
 import de.frank.invoice.worker.application.watch.FileReadyDetector;
 import de.frank.invoice.worker.application.watch.Sleeper;
 import de.frank.invoice.worker.application.watch.WatchServiceRunner;
@@ -15,14 +16,18 @@ import de.frank.invoice.worker.cli.CliOptions;
 import de.frank.invoice.worker.cli.ConsoleBatchProcessingListener;
 import de.frank.invoice.worker.cli.InvoiceWorkerCli;
 import de.frank.invoice.worker.infrastructure.http.ReadOnlyApiServer;
+import de.frank.invoice.worker.infrastructure.export.CsvInvoiceExporter;
+import de.frank.invoice.worker.infrastructure.export.ExcelInvoiceExporter;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
 import de.frank.invoice.worker.infrastructure.watch.NioDirectoryWatcher;
+import de.frank.invoice.worker.ui.vaadin.InvoiceUiServer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.PrintStream;
 import java.time.Clock;
+import java.util.List;
 import java.util.Properties;
 
 /**
@@ -86,6 +91,9 @@ public class InvoiceWorkerApplication {
         if (options.command() == CliCommand.SERVE) {
             return runApi(configuration, options, out);
         }
+        if (options.command() == CliCommand.UI) {
+            return runUi(configuration, options, out, err);
+        }
 
         final ConsoleBatchProcessingListener listener = new ConsoleBatchProcessingListener(out);
         final InvoiceWorker invoiceWorker = invoiceWorkerFactory.create(
@@ -107,6 +115,36 @@ public class InvoiceWorkerApplication {
                 options,
                 watchServiceRunner)
                 .run(args);
+    }
+
+    private static int runUi(
+            final ApplicationConfiguration configuration,
+            final CliOptions options,
+            final PrintStream out,
+            final PrintStream err) {
+        final SQLiteInvoiceRepository invoiceRepository =
+                new SQLiteInvoiceRepository(configuration.persistence().databaseFile());
+        final DefaultInvoiceExportService exportService = new DefaultInvoiceExportService(
+                invoiceRepository,
+                List.of(new CsvInvoiceExporter(), new ExcelInvoiceExporter()),
+                Clock.systemDefaultZone(),
+                configuration.ui().maximumExportInvoices());
+        final InvoiceUiServer uiServer = new InvoiceUiServer(configuration.ui(), exportService);
+        Runtime.getRuntime().addShutdownHook(new Thread(uiServer::close, "invoice-ui-shutdown"));
+        try {
+            uiServer.start();
+            out.println("Invoice Worker UI gestartet");
+            out.println("Profil: " + options.profile().profileName());
+            out.println("UI: http://" + configuration.ui().host() + ":" + uiServer.port());
+            out.println("Datenbank: " + configuration.persistence().databaseFile());
+            uiServer.await();
+            return InvoiceWorkerCli.EXIT_SUCCESS;
+        } catch (RuntimeException exception) {
+            LoggerFactory.getLogger(InvoiceWorkerApplication.class).error("Invoice UI failed", exception);
+            err.println("Die Invoice Worker UI konnte nicht gestartet werden.");
+            uiServer.close();
+            return InvoiceWorkerCli.EXIT_ERROR;
+        }
     }
 
     private static int runApi(

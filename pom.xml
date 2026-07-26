@@ -18,7 +18,10 @@
         <maven.compiler.release>21</maven.compiler.release>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <apache-poi.version>5.4.1</apache-poi.version>
-    </properties>
+        <vaadin.version>25.2.3</vaadin.version>
+        <tomcat.version>11.0.24</tomcat.version>
+        <jackson.version>2.21.0</jackson.version>
+</properties>
 <build>
     <plugins>
         <plugin>
@@ -49,6 +52,7 @@
                             <transformer implementation="org.apache.maven.plugins.shade.resource.ManifestResourceTransformer">
                                 <mainClass>de.frank.invoice.worker.InvoiceWorkerApplication</mainClass>
                             </transformer>
+                            <transformer implementation="org.apache.maven.plugins.shade.resource.ServicesResourceTransformer"/>
                         </transformers>
                     </configuration>
                 </execution>
