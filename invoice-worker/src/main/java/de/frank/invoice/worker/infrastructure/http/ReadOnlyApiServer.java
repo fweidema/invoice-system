@@ -10,6 +10,10 @@ import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistorySearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
 import de.frank.invoice.worker.application.persistence.SortDirection;
+import de.frank.invoice.worker.application.manualreview.InvoiceCorrection;
+import de.frank.invoice.worker.application.manualreview.ManualReviewException;
+import de.frank.invoice.worker.application.manualreview.ManualReviewSearchCriteria;
+import de.frank.invoice.worker.application.manualreview.ManualReviewService;
 import de.frank.invoice.worker.cli.InvoiceWorkerCli;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 import de.frank.invoice.worker.domain.processing.ProcessingHistoryEntry;
@@ -24,6 +28,7 @@ import java.net.InetSocketAddress;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalDate;
+import java.time.Instant;
 import java.time.format.DateTimeParseException;
 import java.util.HashMap;
 import java.util.List;
@@ -47,16 +52,20 @@ public class ReadOnlyApiServer implements AutoCloseable {
     private static final String PATH_API_HEALTH = "/api/health";
     private static final String PATH_INVOICES = "/api/invoices";
     private static final String PATH_HISTORY = "/api/processing-history";
+    private static final String PATH_MANUAL_REVIEW = "/api/manual-review";
     private static final int HTTP_OK = 200;
     private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_NOT_FOUND = 404;
     private static final int HTTP_METHOD_NOT_ALLOWED = 405;
+    private static final int HTTP_CONFLICT = 409;
+    private static final int HTTP_ACCEPTED = 202;
     private static final int HTTP_INTERNAL_ERROR = 500;
 
     private final ApiConfiguration configuration;
     private final InvoiceRepository invoiceRepository;
     private final ProcessingHistoryRepository processingHistoryRepository;
     private final ObjectMapper objectMapper;
+    private final ManualReviewService manualReviewService;
     private final CountDownLatch stopped = new CountDownLatch(1);
     private HttpServer server;
     private ExecutorService executorService;
@@ -72,7 +81,18 @@ public class ReadOnlyApiServer implements AutoCloseable {
             final ApiConfiguration configuration,
             final InvoiceRepository invoiceRepository,
             final ProcessingHistoryRepository processingHistoryRepository) {
-        this(configuration, invoiceRepository, processingHistoryRepository, new ObjectMapper());
+        this(configuration, invoiceRepository, processingHistoryRepository, null, new ObjectMapper());
+    }
+
+    /**
+     * Creates an API server with internal manual-review mutation endpoints.
+     */
+    public ReadOnlyApiServer(
+            final ApiConfiguration configuration,
+            final InvoiceRepository invoiceRepository,
+            final ProcessingHistoryRepository processingHistoryRepository,
+            final ManualReviewService manualReviewService) {
+        this(configuration, invoiceRepository, processingHistoryRepository, manualReviewService, new ObjectMapper());
     }
 
     ReadOnlyApiServer(
@@ -80,12 +100,22 @@ public class ReadOnlyApiServer implements AutoCloseable {
             final InvoiceRepository invoiceRepository,
             final ProcessingHistoryRepository processingHistoryRepository,
             final ObjectMapper objectMapper) {
+        this(configuration, invoiceRepository, processingHistoryRepository, null, objectMapper);
+    }
+
+    ReadOnlyApiServer(
+            final ApiConfiguration configuration,
+            final InvoiceRepository invoiceRepository,
+            final ProcessingHistoryRepository processingHistoryRepository,
+            final ManualReviewService manualReviewService,
+            final ObjectMapper objectMapper) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.invoiceRepository = Objects.requireNonNull(invoiceRepository, "invoiceRepository must not be null");
         this.processingHistoryRepository = Objects.requireNonNull(
                 processingHistoryRepository,
                 "processingHistoryRepository must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
+        this.manualReviewService = manualReviewService;
     }
 
     /**
@@ -122,6 +152,9 @@ public class ReadOnlyApiServer implements AutoCloseable {
         server.createContext(PATH_API_HEALTH, exchange -> handle(exchange, this::handleHealth));
         server.createContext(PATH_INVOICES, exchange -> handle(exchange, this::handleInvoices));
         server.createContext(PATH_HISTORY, exchange -> handle(exchange, this::handleProcessingHistory));
+        if (manualReviewService != null) {
+            server.createContext(PATH_MANUAL_REVIEW, exchange -> handle(exchange, this::handleManualReview));
+        }
         server.createContext("/", exchange -> handle(exchange, this::handleStaticResource));
         executorService = Executors.newCachedThreadPool();
         server.setExecutor(executorService);
@@ -281,6 +314,108 @@ public class ReadOnlyApiServer implements AutoCloseable {
         writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
     }
 
+    private void handleManualReview(final HttpExchange exchange) throws IOException {
+        try {
+            final String path = exchange.getRequestURI().getPath();
+            if (PATH_MANUAL_REVIEW.equals(path)) {
+                if (!METHOD_GET.equals(exchange.getRequestMethod())) {
+                    methodNotAllowed(exchange, "GET");
+                    return;
+                }
+                writeJson(exchange, HTTP_OK, PageResponse.from(
+                        manualReviewService.search(manualReviewCriteria(exchange)), ManualReviewResponse::from));
+                return;
+            }
+            final String remainder = path.substring((PATH_MANUAL_REVIEW + "/").length());
+            final String[] segments = remainder.split("/");
+            if (segments.length < 1 || segments.length > 2 || segments[0].isBlank()) {
+                writeError(exchange, HTTP_NOT_FOUND, "MANUAL_REVIEW_NOT_FOUND", "Manual-review case not found.");
+                return;
+            }
+            final String processingId = decode(segments[0]);
+            if (processingId.contains("/") || processingId.contains("..")) {
+                writeError(exchange, HTTP_NOT_FOUND, "MANUAL_REVIEW_NOT_FOUND", "Manual-review case not found.");
+                return;
+            }
+            if (segments.length == 1 && METHOD_GET.equals(exchange.getRequestMethod())) {
+                writeJson(exchange, HTTP_OK, ManualReviewResponse.from(manualReviewService.detail(processingId)));
+                return;
+            }
+            if (segments.length == 2) {
+                handleManualReviewAction(exchange, processingId, segments[1]);
+                return;
+            }
+            methodNotAllowed(exchange, "GET");
+        } catch (ManualReviewException exception) {
+            writeManualReviewError(exchange, exception);
+        } catch (IllegalArgumentException exception) {
+            writeError(exchange, HTTP_BAD_REQUEST, "VALIDATION_FAILED", "Invalid request.");
+        }
+    }
+
+    private void handleManualReviewAction(
+            final HttpExchange exchange,
+            final String processingId,
+            final String action) throws IOException {
+        if ("ocr-text".equals(action) && METHOD_GET.equals(exchange.getRequestMethod())) {
+            writeJson(exchange, HTTP_OK, manualReviewService.ocrText(processingId));
+            return;
+        }
+        if ("original".equals(action) && METHOD_GET.equals(exchange.getRequestMethod())) {
+            final de.frank.invoice.worker.application.manualreview.DocumentDownload download =
+                    manualReviewService.original(processingId);
+            exchange.getResponseHeaders().set("Content-Type", download.contentType());
+            exchange.getResponseHeaders().set(
+                    "Content-Disposition", "attachment; filename=\"" + download.filename() + "\"");
+            final long size = java.nio.file.Files.size(download.path());
+            exchange.sendResponseHeaders(HTTP_OK, size);
+            try (OutputStream output = exchange.getResponseBody();
+                 InputStream input = java.nio.file.Files.newInputStream(download.path())) {
+                input.transferTo(output);
+            }
+            return;
+        }
+        if ("invoice".equals(action) && "PATCH".equals(exchange.getRequestMethod())) {
+            final InvoicePatchRequest request = readJson(exchange, InvoicePatchRequest.class);
+            final InvoiceCorrection correction = request.toCorrection(expectedVersion(exchange, request.expectedUpdatedAt()));
+            writeJson(exchange, HTTP_OK, ManualReviewResponse.from(
+                    manualReviewService.correctInvoice(processingId, correction)));
+            return;
+        }
+        if (List.of("retry", "archive", "complete").contains(action)
+                && "POST".equals(exchange.getRequestMethod())) {
+            final ActionRequest request = readOptionalJson(exchange, ActionRequest.class, new ActionRequest(null, null));
+            final Instant expected = expectedVersion(exchange, request.expectedUpdatedAt());
+            final Object response = switch (action) {
+                case "retry" -> manualReviewService.requestRetry(processingId, expected);
+                case "archive" -> manualReviewService.archive(processingId, expected);
+                default -> manualReviewService.complete(processingId, expected, request.comment());
+            };
+            writeJson(exchange, "retry".equals(action) ? HTTP_ACCEPTED : HTTP_OK,
+                    ManualReviewResponse.from((de.frank.invoice.worker.application.manualreview.ManualReviewCase) response));
+            return;
+        }
+        methodNotAllowed(exchange, action.equals("invoice") ? "PATCH" : "POST");
+    }
+
+    private ManualReviewSearchCriteria manualReviewCriteria(final HttpExchange exchange) {
+        final Map<String, String> query = queryParameters(exchange);
+        final int maximum = manualReviewService.maximumPageSize();
+        final String statusesValue = query.get("status");
+        final java.util.Set<ProcessingStatus> statuses = statusesValue == null || statusesValue.isBlank()
+                ? java.util.Set.of()
+                : java.util.Arrays.stream(statusesValue.split(","))
+                .map(value -> ProcessingStatus.valueOf(value.trim().toUpperCase(java.util.Locale.ROOT)))
+                .collect(java.util.stream.Collectors.toUnmodifiableSet());
+        return new ManualReviewSearchCriteria(
+                intQuery(query, "page", 0, 0, Integer.MAX_VALUE),
+                intQuery(query, "size", manualReviewService.defaultPageSize(), 1, maximum),
+                whitelist(query.getOrDefault("sort", "lastErrorAt"),
+                        List.of("lastErrorAt", "filename", "vendor", "invoiceDate", "amount", "status", "attempts"), "sort"),
+                direction(query.get("direction")), statuses, textQuery(query, "q"),
+                instantQuery(query, "from"), instantQuery(query, "to"));
+    }
+
     private InvoiceSearchCriteria invoiceCriteria(final HttpExchange exchange) {
         final Map<String, String> query = queryParameters(exchange);
         return new InvoiceSearchCriteria(
@@ -379,6 +514,18 @@ public class ReadOnlyApiServer implements AutoCloseable {
         }
     }
 
+    private Instant instantQuery(final Map<String, String> query, final String name) {
+        final String value = query.get(name);
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return Instant.parse(value.trim());
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new IllegalArgumentException("Invalid query parameter: " + name, exception);
+        }
+    }
+
     private ProcessingStatus statusQuery(final Map<String, String> query, final String name) {
         final String value = query.get(name);
         if (value == null || value.isBlank()) {
@@ -398,6 +545,63 @@ public class ReadOnlyApiServer implements AutoCloseable {
         exchange.getResponseHeaders().set("Allow", METHOD_GET);
         writeError(exchange, HTTP_METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "Only GET is supported.");
         return false;
+    }
+
+    private void methodNotAllowed(final HttpExchange exchange, final String allowed) throws IOException {
+        exchange.getResponseHeaders().set("Allow", allowed);
+        writeError(exchange, HTTP_METHOD_NOT_ALLOWED, "METHOD_NOT_ALLOWED", "Method is not supported.");
+    }
+
+    private void writeManualReviewError(
+            final HttpExchange exchange,
+            final ManualReviewException exception) throws IOException {
+        final int status = switch (exception.code()) {
+            case MANUAL_REVIEW_NOT_FOUND -> HTTP_NOT_FOUND;
+            case CONCURRENT_MODIFICATION -> HTTP_CONFLICT;
+            case VALIDATION_FAILED -> HTTP_BAD_REQUEST;
+            default -> exception.code().name().contains("NOT_AVAILABLE") ? HTTP_NOT_FOUND : HTTP_CONFLICT;
+        };
+        writeJson(exchange, status, ApiErrorResponse.of(
+                exception.code().name(), exception.getMessage(), exception.fieldErrors()));
+    }
+
+    private <T> T readJson(final HttpExchange exchange, final Class<T> type) throws IOException {
+        try {
+            return objectMapper.readValue(exchange.getRequestBody(), type);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid JSON request", exception);
+        }
+    }
+
+    private <T> T readOptionalJson(
+            final HttpExchange exchange,
+            final Class<T> type,
+            final T defaultValue) throws IOException {
+        final byte[] body = exchange.getRequestBody().readAllBytes();
+        if (body.length == 0) {
+            return defaultValue;
+        }
+        try {
+            return objectMapper.readValue(body, type);
+        } catch (RuntimeException exception) {
+            throw new IllegalArgumentException("Invalid JSON request", exception);
+        }
+    }
+
+    private Instant expectedVersion(final HttpExchange exchange, final String bodyValue) {
+        final String ifMatch = exchange.getRequestHeaders().getFirst("If-Match");
+        final String value = ifMatch == null || ifMatch.isBlank()
+                ? bodyValue : ifMatch.replace("\"", "").trim();
+        if (value == null || value.isBlank()) {
+            throw new ManualReviewException(
+                    de.frank.invoice.worker.application.manualreview.ManualReviewErrorCode.CONCURRENT_MODIFICATION,
+                    "Expected version is required.");
+        }
+        try {
+            return Instant.parse(value);
+        } catch (java.time.format.DateTimeParseException exception) {
+            throw new IllegalArgumentException("Invalid expected version", exception);
+        }
     }
 
     private void writeError(
@@ -452,5 +656,36 @@ public class ReadOnlyApiServer implements AutoCloseable {
     }
 
     public record HealthResponse(String status) {
+    }
+
+    private record ActionRequest(String expectedUpdatedAt, String comment) {
+    }
+
+    private record InvoicePatchRequest(
+            String vendor,
+            String invoiceNumber,
+            String invoiceDate,
+            String amount,
+            String currency,
+            String category,
+            String expectedUpdatedAt) {
+
+        private InvoiceCorrection toCorrection(final Instant expected) {
+            try {
+                return new InvoiceCorrection(
+                        vendor,
+                        invoiceNumber,
+                        invoiceDate == null ? null : LocalDate.parse(invoiceDate),
+                        amount == null ? null : new java.math.BigDecimal(amount),
+                        currency,
+                        category,
+                        expected);
+            } catch (RuntimeException exception) {
+                throw new ManualReviewException(
+                        de.frank.invoice.worker.application.manualreview.ManualReviewErrorCode.VALIDATION_FAILED,
+                        "Invoice validation failed.",
+                        Map.of("request", "Date or amount format is invalid."));
+            }
+        }
     }
 }

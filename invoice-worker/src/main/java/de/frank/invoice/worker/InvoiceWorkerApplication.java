@@ -7,6 +7,7 @@ import de.frank.invoice.worker.application.configuration.ApplicationConfiguratio
 import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
 import de.frank.invoice.worker.application.configuration.WatchConfiguration;
 import de.frank.invoice.worker.application.export.DefaultInvoiceExportService;
+import de.frank.invoice.worker.application.manualreview.ManualReviewService;
 import de.frank.invoice.worker.application.watch.FileReadyDetector;
 import de.frank.invoice.worker.application.watch.Sleeper;
 import de.frank.invoice.worker.application.watch.WatchServiceRunner;
@@ -18,8 +19,12 @@ import de.frank.invoice.worker.cli.InvoiceWorkerCli;
 import de.frank.invoice.worker.infrastructure.http.ReadOnlyApiServer;
 import de.frank.invoice.worker.infrastructure.export.CsvInvoiceExporter;
 import de.frank.invoice.worker.infrastructure.export.ExcelInvoiceExporter;
+import de.frank.invoice.worker.infrastructure.archive.FileSystemArchiveService;
+import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingEventRepository;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingStateRepository;
 import de.frank.invoice.worker.infrastructure.watch.NioDirectoryWatcher;
 import de.frank.invoice.worker.ui.vaadin.InvoiceUiServer;
 import org.slf4j.Logger;
@@ -29,6 +34,7 @@ import java.io.PrintStream;
 import java.time.Clock;
 import java.util.List;
 import java.util.Properties;
+import java.util.Set;
 
 /**
  * Starts the invoice worker command line interface.
@@ -152,10 +158,34 @@ public class InvoiceWorkerApplication {
             final CliOptions options,
             final PrintStream out) {
         final ApiConfiguration apiConfiguration = configuration.api();
+        final SQLiteInvoiceRepository invoiceRepository =
+                new SQLiteInvoiceRepository(configuration.persistence().databaseFile());
+        final SQLiteProcessingHistoryRepository historyRepository =
+                new SQLiteProcessingHistoryRepository(configuration.persistence().databaseFile());
+        final PdfTextExtractor pdfTextExtractor = new PdfTextExtractor();
+        final ManualReviewService manualReviewService = new ManualReviewService(
+                new SQLiteProcessingStateRepository(configuration.persistence().databaseFile()),
+                invoiceRepository,
+                historyRepository,
+                new SQLiteProcessingEventRepository(configuration.persistence().databaseFile()),
+                new FileSystemArchiveService(configuration.archive().archiveDirectory()),
+                (document, path) -> pdfTextExtractor.extract(document, path).extractedText(),
+                configuration.processing(),
+                configuration.manualReview(),
+                Set.of(
+                        configuration.batch().inputDirectory(),
+                        configuration.watch().directory(),
+                        configuration.processing().workDirectory(),
+                        configuration.processing().manualReviewDirectory(),
+                        configuration.processing().errorDirectory(),
+                        configuration.archive().archiveDirectory(),
+                        configuration.ocr().outputDirectory()),
+                Clock.systemUTC());
         final ReadOnlyApiServer apiServer = new ReadOnlyApiServer(
                 apiConfiguration,
-                new SQLiteInvoiceRepository(configuration.persistence().databaseFile()),
-                new SQLiteProcessingHistoryRepository(configuration.persistence().databaseFile()));
+                invoiceRepository,
+                historyRepository,
+                manualReviewService);
         Runtime.getRuntime().addShutdownHook(new Thread(apiServer::requestShutdown, "invoice-api-shutdown"));
         out.println("Invoice Worker API gestartet");
         out.println("Profil: " + options.profile().profileName());
