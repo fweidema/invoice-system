@@ -62,3 +62,13 @@ logs/
 archive/
 input/
 ocr/
+
+### Vaadin frontend build ###
+**/node_modules/
+invoice-worker/package.json
+invoice-worker/pnpm-lock.yaml
+invoice-worker/package-lock.json
+invoice-worker/tsconfig.json
+invoice-worker/types.d.ts
+invoice-worker/src/main/bundles/
+invoice-worker/src/main/frontend/

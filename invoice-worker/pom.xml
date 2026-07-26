@@ -31,6 +31,7 @@
                     </execution>
                 </executions>
                 <configuration>
+                    <pnpmEnable>true</pnpmEnable>
                     <reactEnable>false</reactEnable>
                 </configuration>
             </plugin>
@@ -115,4 +116,3 @@
     </dependencies>
 
 </project>
-

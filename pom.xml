@@ -20,7 +20,7 @@
         <apache-poi.version>5.4.1</apache-poi.version>
         <vaadin.version>25.2.3</vaadin.version>
         <tomcat.version>11.0.24</tomcat.version>
-        <jackson.version>2.21.0</jackson.version>
+        <jackson.version>2.21.4</jackson.version>
 </properties>
 <build>
     <plugins>
