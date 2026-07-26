@@ -46,6 +46,8 @@ class ConfigurationLoaderTest {
         assertThat(configuration.batch().recursive()).isFalse();
         assertThat(configuration.api().host()).isEqualTo("127.0.0.1");
         assertThat(configuration.api().port()).isEqualTo(8080);
+        assertThat(configuration.ui().manualReviewApiBaseUri())
+                .isEqualTo(java.net.URI.create("http://127.0.0.1:8080/"));
         assertThat(configuration.logging().level()).isEqualTo("INFO");
     }
 
@@ -181,6 +183,18 @@ class ConfigurationLoaderTest {
         // Assert
         assertThat(configuration.api().host()).isEqualTo("0.0.0.0");
         assertThat(configuration.api().port()).isEqualTo(9091);
+    }
+
+    @Test
+    void loadEnvironmentOverridesManualReviewApiBaseUri() {
+        final ConfigurationLoader loader = new ConfigurationLoader(name ->
+                "INVOICE_UI_MANUAL_REVIEW_API_BASE_URI".equals(name)
+                        ? "http://invoice-worker-api:8080/" : null);
+
+        final ApplicationConfiguration configuration = loader.load();
+
+        assertThat(configuration.ui().manualReviewApiBaseUri())
+                .isEqualTo(java.net.URI.create("http://invoice-worker-api:8080/"));
     }
 
     @Test

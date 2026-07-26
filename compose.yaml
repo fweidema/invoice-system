@@ -69,6 +69,7 @@ services:
   invoice-worker-api:
     profiles:
       - api
+      - ui
     build:
       context: .
       dockerfile: docker/Dockerfile
@@ -124,6 +125,11 @@ services:
     restart: unless-stopped
     stop_grace_period: 15s
     mem_limit: 768m
+    depends_on:
+      invoice-worker-api:
+        condition: service_healthy
+    environment:
+      INVOICE_UI_MANUAL_REVIEW_API_BASE_URI: ${INVOICE_UI_MANUAL_REVIEW_API_BASE_URI:-http://invoice-worker-api:8080/}
     ports:
       - "${INVOICE_UI_PORT:-8081}:8081"
     volumes:

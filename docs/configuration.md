@@ -62,6 +62,7 @@ ui.host=127.0.0.1
 ui.port=8081
 ui.shutdownTimeout=10s
 ui.maximumExportInvoices=10000
+ui.manualReviewApiBaseUri=http://127.0.0.1:8080/
 ```
 
 ## Umgebungsvariablen
@@ -86,6 +87,7 @@ INVOICE_UI_HOST
 INVOICE_UI_PORT
 INVOICE_UI_SHUTDOWN_TIMEOUT
 INVOICE_UI_MAXIMUM_EXPORT_INVOICES
+INVOICE_UI_MANUAL_REVIEW_API_BASE_URI
 INVOICE_OCR_COMMAND
 INVOICE_OCR_LANGUAGE
 INVOICE_OCR_OUTPUT_DIRECTORY
@@ -151,6 +153,7 @@ ui.host=0.0.0.0
 ui.port=8081
 ui.shutdownTimeout=10s
 ui.maximumExportInvoices=10000
+ui.manualReviewApiBaseUri=http://127.0.0.1:8080/
 
 ocr.command=ocrmypdf
 ocr.language=deu

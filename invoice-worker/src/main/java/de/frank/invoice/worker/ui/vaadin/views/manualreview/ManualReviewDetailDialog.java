@@ -272,10 +272,18 @@ public final class ManualReviewDetailDialog extends Dialog {
     }
 
     private void showError(final String message) {
-        error.setText(message == null || message.isBlank()
-                ? "Die Aktion konnte nicht ausgeführt werden." : message);
+        final String safeMessage = message == null || message.isBlank()
+                ? "Die Aktion konnte nicht ausgeführt werden." : message;
+        error.setText(safeMessage);
         error.getElement().setAttribute("theme", "badge error");
         error.setVisible(true);
+        if (UI.getCurrent() != null) {
+            final Dialog dialog = new Dialog();
+            dialog.setHeaderTitle("Aktion fehlgeschlagen");
+            dialog.add(new Span(safeMessage));
+            dialog.getFooter().add(new Button("Schließen", event -> dialog.close()));
+            dialog.open();
+        }
     }
 
     private void setActionsEnabled(final boolean enabled) {

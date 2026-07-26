@@ -2,6 +2,7 @@ package de.frank.invoice.worker.ui.vaadin.views.manualreview;
 
 import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.datepicker.DatePicker;
+import com.vaadin.flow.component.dialog.Dialog;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.Span;
@@ -10,6 +11,7 @@ import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.progressbar.ProgressBar;
 import com.vaadin.flow.component.select.Select;
 import com.vaadin.flow.component.textfield.TextField;
+import com.vaadin.flow.component.UI;
 import com.vaadin.flow.router.PageTitle;
 import com.vaadin.flow.router.Route;
 import com.vaadin.flow.server.VaadinSession;
@@ -157,6 +159,13 @@ public final class ManualReviewView extends VerticalLayout {
         message.setText(value);
         message.getElement().setAttribute("theme", failure ? "badge error" : "badge");
         message.setVisible(true);
+        if (failure && UI.getCurrent() != null) {
+            final Dialog dialog = new Dialog();
+            dialog.setHeaderTitle("Manual Review nicht verfügbar");
+            dialog.add(new Span(value));
+            dialog.getFooter().add(new Button("Schließen", event -> dialog.close()));
+            dialog.open();
+        }
     }
 
     private static String instant(final DatePicker picker, final boolean end) {
