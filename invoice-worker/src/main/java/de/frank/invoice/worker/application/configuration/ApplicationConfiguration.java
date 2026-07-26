@@ -17,6 +17,7 @@ import java.util.Objects;
  * @param ui browser export UI configuration
  * @param logging logging configuration
  * @param processing resilient processing configuration
+ * @param manualReview internal manual-review API configuration
  */
 public record ApplicationConfiguration(
         ArchiveConfiguration archive,
@@ -28,7 +29,8 @@ public record ApplicationConfiguration(
         ApiConfiguration api,
         UiConfiguration ui,
         LoggingConfiguration logging,
-        ProcessingConfiguration processing) {
+        ProcessingConfiguration processing,
+        ManualReviewConfiguration manualReview) {
 
     /**
      * Creates application configuration with default logging configuration.
@@ -55,7 +57,8 @@ public record ApplicationConfiguration(
                 defaultApiConfiguration(),
                 defaultUiConfiguration(),
                 new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL),
-                ProcessingConfiguration.defaults());
+                ProcessingConfiguration.defaults(),
+                ManualReviewConfiguration.defaults());
     }
 
     /**
@@ -71,7 +74,7 @@ public record ApplicationConfiguration(
             final ApiConfiguration api,
             final LoggingConfiguration logging) {
         this(archive, persistence, ocr, ai, batch, watch, api, defaultUiConfiguration(), logging,
-                ProcessingConfiguration.defaults());
+                ProcessingConfiguration.defaults(), ManualReviewConfiguration.defaults());
     }
 
     /**
@@ -87,7 +90,26 @@ public record ApplicationConfiguration(
             final ApiConfiguration api,
             final UiConfiguration ui,
             final LoggingConfiguration logging) {
-        this(archive, persistence, ocr, ai, batch, watch, api, ui, logging, ProcessingConfiguration.defaults());
+        this(archive, persistence, ocr, ai, batch, watch, api, ui, logging,
+                ProcessingConfiguration.defaults(), ManualReviewConfiguration.defaults());
+    }
+
+    /**
+     * Compatibility constructor for configurations created before manual review support.
+     */
+    public ApplicationConfiguration(
+            final ArchiveConfiguration archive,
+            final PersistenceConfiguration persistence,
+            final OcrConfiguration ocr,
+            final AiConfiguration ai,
+            final BatchConfiguration batch,
+            final WatchConfiguration watch,
+            final ApiConfiguration api,
+            final UiConfiguration ui,
+            final LoggingConfiguration logging,
+            final ProcessingConfiguration processing) {
+        this(archive, persistence, ocr, ai, batch, watch, api, ui, logging, processing,
+                ManualReviewConfiguration.defaults());
     }
 
     /**
@@ -104,6 +126,7 @@ public record ApplicationConfiguration(
         Objects.requireNonNull(ui, "ui must not be null");
         Objects.requireNonNull(logging, "logging must not be null");
         Objects.requireNonNull(processing, "processing must not be null");
+        Objects.requireNonNull(manualReview, "manualReview must not be null");
     }
 
     private static WatchConfiguration defaultWatchConfiguration() {

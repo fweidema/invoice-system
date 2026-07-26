@@ -101,6 +101,11 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
             ORDER BY id DESC
             LIMIT 1
             """;
+    private static final String SELECT_ALL_BY_DOCUMENT_ID = """
+            SELECT * FROM processing_history
+            WHERE document_id = ?
+            ORDER BY started_at, id
+            """;
 
     private static final String COUNT_HISTORY_PREFIX = "SELECT COUNT(*) FROM processing_history";
     private static final String SEARCH_HISTORY_PREFIX = "SELECT * FROM processing_history";
@@ -145,6 +150,24 @@ public class SQLiteProcessingHistoryRepository implements ProcessingHistoryRepos
             }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load processing history for document: " + documentId, exception);
+        }
+    }
+
+    @Override
+    public List<ProcessingHistoryEntry> findAllByDocumentId(final String documentId) {
+        Objects.requireNonNull(documentId, "documentId must not be null");
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_ALL_BY_DOCUMENT_ID)) {
+            statement.setString(1, documentId);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                final List<ProcessingHistoryEntry> entries = new ArrayList<>();
+                while (resultSet.next()) {
+                    entries.add(mapEntry(resultSet));
+                }
+                return List.copyOf(entries);
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load processing history for document", exception);
         }
     }
 

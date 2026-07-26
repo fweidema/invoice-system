@@ -115,6 +115,12 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
                 created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
+    private static final String UPDATE_REVIEW_FIELDS = """
+            UPDATE invoices SET
+                document_type=?, supplier_name=?, invoice_number=?, invoice_date=?,
+                gross_amount=?, currency=?
+            WHERE file_hash=?
+            """;
 
     private static final String SELECT_BY_INVOICE_NUMBER = """
             SELECT * FROM invoices
@@ -193,6 +199,26 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new PersistenceException("Could not save invoice with number: " + invoice.invoiceNumber(), exception);
+        }
+    }
+
+    @Override
+    public boolean update(final Invoice invoice) {
+        Objects.requireNonNull(invoice, "invoice must not be null");
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(UPDATE_REVIEW_FIELDS)) {
+            statement.setString(1, invoice.document().documentType().name());
+            statement.setString(2, invoice.supplier() == null ? null : invoice.supplier().name());
+            statement.setString(3, invoice.invoiceNumber());
+            statement.setString(4, invoice.invoiceDate() == null ? null : invoice.invoiceDate().toString());
+            statement.setString(5, invoice.grossAmount() == null
+                    ? null : invoice.grossAmount().amount().toPlainString());
+            statement.setString(6, invoice.grossAmount() == null || invoice.grossAmount().currency() == null
+                    ? null : invoice.grossAmount().currency().getCurrencyCode());
+            statement.setString(7, invoice.document().fileHash());
+            return statement.executeUpdate() == 1;
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not update invoice review fields", exception);
         }
     }
 

@@ -46,7 +46,14 @@ public final class ProcessingStatusTransitions {
                 ProcessingStatus.FAILED, ProcessingStatus.MANUAL_REVIEW));
         transitions.put(ProcessingStatus.RETRY_PENDING, EnumSet.of(
                 ProcessingStatus.OCR_RUNNING, ProcessingStatus.EXTRACTION_RUNNING,
-                ProcessingStatus.ARCHIVED, ProcessingStatus.MANUAL_REVIEW));
+                ProcessingStatus.ARCHIVED, ProcessingStatus.MANUAL_REVIEW,
+                ProcessingStatus.MANUALLY_COMPLETED));
+        transitions.put(ProcessingStatus.MANUAL_REVIEW, EnumSet.of(
+                ProcessingStatus.RETRY_PENDING, ProcessingStatus.ARCHIVED,
+                ProcessingStatus.MANUALLY_COMPLETED));
+        transitions.put(ProcessingStatus.FAILED, EnumSet.of(
+                ProcessingStatus.RETRY_PENDING, ProcessingStatus.ARCHIVED,
+                ProcessingStatus.MANUALLY_COMPLETED));
         return Map.copyOf(transitions);
     }
 }

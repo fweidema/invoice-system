@@ -65,6 +65,16 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
                 updated_at=excluded.updated_at
             """;
     private static final String SELECT_BY_HASH = "SELECT * FROM processing_state WHERE file_hash = ?";
+    private static final String SELECT_BY_ID = "SELECT * FROM processing_state WHERE processing_id = ?";
+    private static final String SELECT_ALL = "SELECT * FROM processing_state ORDER BY updated_at DESC, processing_id";
+    private static final String CAS_UPDATE = """
+            UPDATE processing_state SET
+                document_id=?, file_hash=?, source_filename=?, source_path=?, status=?,
+                processing_attempts=?, last_error_code=?, last_error_message=?, last_error_at=?,
+                next_retry_at=?, processing_started_at=?, processing_finished_at=?,
+                ocr_output_path=?, archive_path=?, updated_at=?
+            WHERE processing_id=? AND updated_at=?
+            """;
     private static final String SELECT_DUE = """
             SELECT * FROM processing_state
             WHERE status = 'RETRY_PENDING' AND next_retry_at <= ?
@@ -103,6 +113,57 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
             }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load processing state by hash", exception);
+        }
+    }
+
+    @Override
+    public Optional<ProcessingState> findByProcessingId(final String processingId) {
+        return findOne(SELECT_BY_ID, processingId, "Could not load processing state by id");
+    }
+
+    @Override
+    public List<ProcessingState> findAll() {
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_ALL);
+             ResultSet resultSet = statement.executeQuery()) {
+            final List<ProcessingState> states = new ArrayList<>();
+            while (resultSet.next()) {
+                states.add(map(resultSet));
+            }
+            return List.copyOf(states);
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load processing states", exception);
+        }
+    }
+
+    @Override
+    public boolean compareAndSet(
+            final String processingId,
+            final Instant expectedUpdatedAt,
+            final ProcessingState state) {
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(CAS_UPDATE)) {
+            int index = 1;
+            statement.setString(index++, state.documentId());
+            statement.setString(index++, state.fileHash());
+            statement.setString(index++, state.sourceFilename());
+            statement.setString(index++, state.sourcePath());
+            statement.setString(index++, state.status().name());
+            statement.setInt(index++, state.processingAttempts());
+            statement.setString(index++, enumName(state.lastErrorCode()));
+            statement.setString(index++, state.lastErrorMessage());
+            statement.setString(index++, instant(state.lastErrorAt()));
+            statement.setString(index++, instant(state.nextRetryAt()));
+            statement.setString(index++, state.processingStartedAt().toString());
+            statement.setString(index++, instant(state.processingFinishedAt()));
+            statement.setString(index++, state.ocrOutputPath());
+            statement.setString(index++, state.archivePath());
+            statement.setString(index++, state.updatedAt().toString());
+            statement.setString(index++, processingId);
+            statement.setString(index, expectedUpdatedAt.toString());
+            return statement.executeUpdate() == 1;
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not conditionally update processing state", exception);
         }
     }
 
@@ -194,5 +255,18 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
 
     private ProcessingErrorCode errorCode(final String value) {
         return value == null ? null : ProcessingErrorCode.valueOf(value);
+    }
+
+    private Optional<ProcessingState> findOne(final String sql, final String value, final String message) {
+        Objects.requireNonNull(value, "lookup value must not be null");
+        try (Connection connection = connectionFactory.openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            statement.setString(1, value);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? Optional.of(map(resultSet)) : Optional.empty();
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException(message, exception);
+        }
     }
 }

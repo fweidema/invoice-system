@@ -49,6 +49,10 @@ public interface ProcessingHistoryRepository {
                 .reduce((first, second) -> second);
     }
 
+    default List<ProcessingHistoryEntry> findAllByDocumentId(final String documentId) {
+        return findAll().stream().filter(entry -> entry.documentId().equals(documentId)).toList();
+    }
+
     /**
      * Searches processing history with pagination, filtering and sorting.
      *

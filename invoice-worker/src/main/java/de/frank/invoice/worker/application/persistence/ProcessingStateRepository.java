@@ -15,5 +15,21 @@ public interface ProcessingStateRepository {
 
     Optional<ProcessingState> findByFileHash(String fileHash);
 
+    default Optional<ProcessingState> findByProcessingId(final String processingId) {
+        return findAll().stream().filter(state -> state.processingId().equals(processingId)).findFirst();
+    }
+
+    default List<ProcessingState> findAll() {
+        return List.of();
+    }
+
+    default boolean compareAndSet(
+            final String processingId,
+            final Instant expectedUpdatedAt,
+            final ProcessingState state) {
+        save(state);
+        return true;
+    }
+
     List<ProcessingState> findRetriesDueAt(Instant timestamp);
 }

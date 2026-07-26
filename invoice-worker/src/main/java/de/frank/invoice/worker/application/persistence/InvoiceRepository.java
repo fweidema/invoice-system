@@ -22,6 +22,16 @@ public interface InvoiceRepository {
     void save(Invoice invoice);
 
     /**
+     * Updates the existing invoice identified by its immutable file hash.
+     *
+     * @param invoice corrected invoice
+     * @return whether one existing invoice was updated
+     */
+    default boolean update(final Invoice invoice) {
+        return false;
+    }
+
+    /**
      * Finds an invoice by invoice number.
      *
      * @param invoiceNumber invoice number

@@ -31,6 +31,9 @@ public enum ProcessingStatus {
     /** Processing requires a human decision. */
     MANUAL_REVIEW,
 
+    /** Review was explicitly closed without claiming successful archiving. */
+    MANUALLY_COMPLETED,
+
     /**
      * Optical character recognition has been completed.
      */

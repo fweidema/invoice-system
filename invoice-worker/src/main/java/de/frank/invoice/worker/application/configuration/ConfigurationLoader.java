@@ -26,6 +26,10 @@ public class ConfigurationLoader {
     public static final String PROCESSING_MANUAL_REVIEW_DIRECTORY = "processing.manualReviewDirectory";
     public static final String PROCESSING_ERROR_DIRECTORY = "processing.errorDirectory";
     public static final String PROCESSING_MAXIMUM_ERROR_MESSAGE = "processing.maximumErrorMessageCharacters";
+    public static final String MANUAL_REVIEW_DEFAULT_PAGE_SIZE = "manualReview.defaultPageSize";
+    public static final String MANUAL_REVIEW_MAX_PAGE_SIZE = "manualReview.maxPageSize";
+    public static final String MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH = "manualReview.maxOcrTextLength";
+    public static final String MANUAL_REVIEW_DOWNLOAD_ENABLED = "manualReview.downloadEnabled";
     public static final String AI_PROVIDER = "ai.provider";
     public static final String AI_MODEL = "ai.model";
     public static final String AI_TEMPERATURE = "ai.temperature";
@@ -70,6 +74,10 @@ public class ConfigurationLoader {
             Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
             Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
             Map.entry("INVOICE_OCR_TIMEOUT", OCR_TIMEOUT),
+            Map.entry("MANUAL_REVIEW_DEFAULT_PAGE_SIZE", MANUAL_REVIEW_DEFAULT_PAGE_SIZE),
+            Map.entry("MANUAL_REVIEW_MAX_PAGE_SIZE", MANUAL_REVIEW_MAX_PAGE_SIZE),
+            Map.entry("MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH", MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH),
+            Map.entry("MANUAL_REVIEW_DOWNLOAD_ENABLED", MANUAL_REVIEW_DOWNLOAD_ENABLED),
             Map.entry("INVOICE_LOG_LEVEL", LOGGING_LEVEL));
 
     private final Function<String, String> environmentLookup;
@@ -173,6 +181,10 @@ public class ConfigurationLoader {
         properties.setProperty(PROCESSING_MANUAL_REVIEW_DIRECTORY, "manual-review");
         properties.setProperty(PROCESSING_ERROR_DIRECTORY, "error");
         properties.setProperty(PROCESSING_MAXIMUM_ERROR_MESSAGE, "1024");
+        properties.setProperty(MANUAL_REVIEW_DEFAULT_PAGE_SIZE, "25");
+        properties.setProperty(MANUAL_REVIEW_MAX_PAGE_SIZE, "100");
+        properties.setProperty(MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH, "100000");
+        properties.setProperty(MANUAL_REVIEW_DOWNLOAD_ENABLED, "true");
         properties.setProperty(AI_PROVIDER, AiConfiguration.PROVIDER_MOCK);
         properties.setProperty(AI_MODEL, "gpt-5");
         properties.setProperty(AI_TEMPERATURE, "0.0");
@@ -207,7 +219,8 @@ public class ConfigurationLoader {
                 api(properties),
                 ui(properties),
                 logging(properties),
-                processing(properties));
+                processing(properties),
+                manualReview(properties));
     }
 
     private void applyEnvironment(final Properties properties) {
@@ -251,6 +264,14 @@ public class ConfigurationLoader {
                 path(properties, PROCESSING_MANUAL_REVIEW_DIRECTORY),
                 path(properties, PROCESSING_ERROR_DIRECTORY),
                 positiveInteger(properties, PROCESSING_MAXIMUM_ERROR_MESSAGE));
+    }
+
+    private ManualReviewConfiguration manualReview(final Properties properties) {
+        return new ManualReviewConfiguration(
+                positiveInteger(properties, MANUAL_REVIEW_DEFAULT_PAGE_SIZE),
+                positiveInteger(properties, MANUAL_REVIEW_MAX_PAGE_SIZE),
+                positiveInteger(properties, MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH),
+                bool(properties, MANUAL_REVIEW_DOWNLOAD_ENABLED));
     }
 
     private AiConfiguration ai(final Properties properties) {
