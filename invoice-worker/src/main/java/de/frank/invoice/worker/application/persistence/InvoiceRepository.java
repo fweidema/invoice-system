@@ -1,5 +1,6 @@
 package de.frank.invoice.worker.application.persistence;
 
+import de.frank.invoice.worker.application.export.InvoiceExportCriteria;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 
 import java.math.BigDecimal;
@@ -34,6 +35,33 @@ public interface InvoiceRepository {
      * @return stored invoices
      */
     List<Invoice> findAll();
+
+    /**
+     * Loads invoices for a read-only export in deterministic order.
+     *
+     * @param criteria export filters and maximum result size
+     * @return matching invoices
+     */
+    default List<Invoice> findForExport(final InvoiceExportCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria must not be null");
+        return findAll().stream()
+                .filter(invoice -> criteria.invoiceDateFrom() == null
+                        || invoice.invoiceDate() != null && !invoice.invoiceDate().isBefore(criteria.invoiceDateFrom()))
+                .filter(invoice -> criteria.invoiceDateTo() == null
+                        || invoice.invoiceDate() != null && !invoice.invoiceDate().isAfter(criteria.invoiceDateTo()))
+                .filter(invoice -> containsIgnoreCase(
+                        invoice.supplier() == null ? null : invoice.supplier().name(),
+                        criteria.vendor()))
+                .filter(invoice -> containsIgnoreCase(invoice.document().documentType().name(), criteria.category()))
+                .sorted(java.util.Comparator
+                        .comparing(Invoice::invoiceDate, java.util.Comparator.nullsLast(java.util.Comparator.naturalOrder()))
+                        .thenComparing(invoice -> invoice.supplier() == null ? null : invoice.supplier().name(),
+                                java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                        .thenComparing(Invoice::invoiceNumber, java.util.Comparator.nullsLast(String.CASE_INSENSITIVE_ORDER))
+                        .thenComparing(invoice -> invoice.document().id()))
+                .limit(criteria.maximumResultSize())
+                .toList();
+    }
 
     /**
      * Searches invoices with pagination, filtering and sorting.
@@ -81,4 +109,9 @@ public interface InvoiceRepository {
      * @return true if a matching invoice exists
      */
     boolean existsBySupplierDateAndGrossAmount(String supplierName, LocalDate invoiceDate, BigDecimal grossAmount);
+
+    private static boolean containsIgnoreCase(final String candidate, final String filter) {
+        return filter == null || candidate != null
+                && candidate.toLowerCase(java.util.Locale.ROOT).contains(filter.toLowerCase(java.util.Locale.ROOT));
+    }
 }

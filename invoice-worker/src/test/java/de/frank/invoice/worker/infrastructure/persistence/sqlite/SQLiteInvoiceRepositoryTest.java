@@ -1,5 +1,6 @@
 package de.frank.invoice.worker.infrastructure.persistence.sqlite;
 
+import de.frank.invoice.worker.application.export.InvoiceExportCriteria;
 import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
 import de.frank.invoice.worker.application.persistence.PageResult;
 import de.frank.invoice.worker.application.persistence.SortDirection;
@@ -185,6 +186,38 @@ class SQLiteInvoiceRepositoryTest {
         assertThatThrownBy(() -> repository.search(criteria))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("Unsupported invoice sort field");
+    }
+
+    @Test
+    void findForExportFiltersInclusivelyAndSortsDeterministically() {
+        final SQLiteInvoiceRepository repository = repository();
+        repository.save(invoice("INV-002", "zeta GmbH", "zeta.pdf"));
+        repository.save(invoice("INV-001", "Alpha GmbH", "alpha.pdf"));
+        repository.save(invoice("OTHER-003", "Other GmbH", "other.pdf"));
+
+        final List<Invoice> result = repository.findForExport(new InvoiceExportCriteria(
+                LocalDate.of(2026, 6, 27),
+                LocalDate.of(2026, 6, 27),
+                " gmbh ",
+                "invoice",
+                10));
+
+        assertThat(result)
+                .extracting(Invoice::invoiceNumber)
+                .containsExactly("INV-001", "OTHER-003", "INV-002");
+        assertThat(repository.findAll()).hasSize(3);
+    }
+
+    @Test
+    void findForExportEscapesTextFilterWildcards() {
+        final SQLiteInvoiceRepository repository = repository();
+        repository.save(invoice("INV-001", "A 100%_\\ GmbH", "literal.pdf"));
+        repository.save(invoice("INV-002", "A 100XYZ GmbH", "wildcard.pdf"));
+
+        final List<Invoice> result = repository.findForExport(new InvoiceExportCriteria(
+                null, null, "100%_\\", null, 10));
+
+        assertThat(result).extracting(Invoice::invoiceNumber).containsExactly("INV-001");
     }
 
     @Test

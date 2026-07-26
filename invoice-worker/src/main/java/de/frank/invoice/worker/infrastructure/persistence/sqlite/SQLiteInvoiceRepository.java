@@ -1,6 +1,7 @@
 package de.frank.invoice.worker.infrastructure.persistence.sqlite;
 
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
+import de.frank.invoice.worker.application.export.InvoiceExportCriteria;
 import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
 import de.frank.invoice.worker.application.persistence.PageResult;
 import de.frank.invoice.worker.application.persistence.SortDirection;
@@ -230,6 +231,47 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             return List.copyOf(invoices);
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load invoices", exception);
+        }
+    }
+
+    @Override
+    public List<Invoice> findForExport(final InvoiceExportCriteria criteria) {
+        Objects.requireNonNull(criteria, "criteria must not be null");
+        final List<Object> parameters = new ArrayList<>();
+        final List<String> conditions = new ArrayList<>();
+        if (criteria.invoiceDateFrom() != null) {
+            conditions.add("invoice_date >= ?");
+            parameters.add(criteria.invoiceDateFrom().toString());
+        }
+        if (criteria.invoiceDateTo() != null) {
+            conditions.add("invoice_date <= ?");
+            parameters.add(criteria.invoiceDateTo().toString());
+        }
+        if (criteria.vendor() != null) {
+            conditions.add("LOWER(supplier_name) LIKE ?" + LIKE_ESCAPE_CLAUSE);
+            parameters.add(like(criteria.vendor()));
+        }
+        if (criteria.category() != null) {
+            conditions.add("LOWER(document_type) LIKE ?" + LIKE_ESCAPE_CLAUSE);
+            parameters.add(like(criteria.category()));
+        }
+        final String whereClause = conditions.isEmpty() ? "" : " WHERE " + String.join(" AND ", conditions);
+        final String sql = SEARCH_INVOICES_PREFIX + whereClause
+                + " ORDER BY invoice_date ASC, supplier_name COLLATE NOCASE ASC,"
+                + " invoice_number COLLATE NOCASE ASC, id ASC LIMIT ?";
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(sql)) {
+            final int nextIndex = bindParameters(statement, parameters, 1);
+            statement.setInt(nextIndex, criteria.maximumResultSize());
+            try (ResultSet resultSet = statement.executeQuery()) {
+                final List<Invoice> invoices = new ArrayList<>();
+                while (resultSet.next()) {
+                    invoices.add(mapInvoice(resultSet));
+                }
+                return List.copyOf(invoices);
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load invoices for export", exception);
         }
     }
 
