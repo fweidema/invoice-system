@@ -61,7 +61,7 @@ backup/
 logs/
 archive/
 input/
-ocr/
+/ocr/
 
 ### Vaadin frontend build ###
 **/node_modules/

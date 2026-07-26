@@ -10,6 +10,27 @@ public enum ProcessingStatus {
      */
     NEW,
 
+    /** The source was registered for processing. */
+    RECEIVED,
+
+    /** OCR is currently running. */
+    OCR_RUNNING,
+
+    /** OCR completed and its output can be reused. */
+    OCR_COMPLETED,
+
+    /** Structured extraction is currently running. */
+    EXTRACTION_RUNNING,
+
+    /** Structured extraction completed and its result can be reused. */
+    EXTRACTION_COMPLETED,
+
+    /** A bounded retry is scheduled. */
+    RETRY_PENDING,
+
+    /** Processing requires a human decision. */
+    MANUAL_REVIEW,
+
     /**
      * Optical character recognition has been completed.
      */

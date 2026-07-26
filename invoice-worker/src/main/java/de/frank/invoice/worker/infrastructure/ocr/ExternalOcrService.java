@@ -21,6 +21,9 @@ public class ExternalOcrService implements OcrService {
 
     private final String ocrCommand;
     private final String language;
+    private final java.time.Duration timeout;
+    private final int outputLimit;
+    private final OcrProcessExecutor processExecutor;
 
     /**
      * Creates a service using central OCR configuration defaults.
@@ -44,9 +47,16 @@ public class ExternalOcrService implements OcrService {
      * @param configuration OCR configuration
      */
     public ExternalOcrService(final OcrConfiguration configuration) {
+        this(configuration, new JdkOcrProcessExecutor());
+    }
+
+    ExternalOcrService(final OcrConfiguration configuration, final OcrProcessExecutor processExecutor) {
         Objects.requireNonNull(configuration, "configuration must not be null");
         this.ocrCommand = configuration.command();
         this.language = configuration.language();
+        this.timeout = configuration.timeout();
+        this.outputLimit = configuration.maximumProcessOutputCharacters();
+        this.processExecutor = Objects.requireNonNull(processExecutor, "processExecutor must not be null");
     }
 
     /**
@@ -66,9 +76,16 @@ public class ExternalOcrService implements OcrService {
 
         try {
             Files.createDirectories(outputDirectory);
-            final int exitCode = startOcrProcess(inputFile, outputFile);
-            if (exitCode != 0) {
-                throw new OcrException("OCR process failed with exit code " + exitCode + " for document " + document.id());
+            final OcrProcessResult processResult = startOcrProcess(inputFile, outputFile);
+            if (processResult.timedOut()) {
+                throw new OcrException("OCR process timed out for document " + document.id());
+            }
+            if (processResult.exitCode() != 0) {
+                throw new OcrException("OCR process failed with exit code " + processResult.exitCode()
+                        + " for document " + document.id() + outputSummary(processResult));
+            }
+            if (!Files.isRegularFile(outputFile) || Files.size(outputFile) == 0) {
+                throw new OcrException("OCR process produced no valid output for document " + document.id());
             }
             return outputFile;
         } catch (IOException exception) {
@@ -79,7 +96,8 @@ public class ExternalOcrService implements OcrService {
         }
     }
 
-    private int startOcrProcess(final Path inputFile, final Path outputFile) throws IOException, InterruptedException {
+    private OcrProcessResult startOcrProcess(final Path inputFile, final Path outputFile)
+            throws IOException, InterruptedException {
         final List<String> command = new ArrayList<>();
         command.add(ocrCommand);
         command.add("--deskew");
@@ -90,11 +108,14 @@ public class ExternalOcrService implements OcrService {
         command.add(inputFile.toString());
         command.add(outputFile.toString());
 
-        final ProcessBuilder processBuilder = new ProcessBuilder(command);
-        processBuilder.redirectError(ProcessBuilder.Redirect.DISCARD);
-        processBuilder.redirectOutput(ProcessBuilder.Redirect.DISCARD);
-        final Process process = processBuilder.start();
-        return process.waitFor();
+        return processExecutor.execute(List.copyOf(command), timeout, outputLimit);
+    }
+
+    private String outputSummary(final OcrProcessResult result) {
+        if (result.output() == null || result.output().isBlank()) {
+            return "";
+        }
+        return "; output=" + result.output().replaceAll("\\s+", " ").trim();
     }
 
     private String createOutputFilename(final String originalFilename) {

@@ -18,6 +18,14 @@ public class ConfigurationLoader {
     public static final String OCR_LANGUAGE = "ocr.language";
     public static final String OCR_COMMAND = "ocr.command";
     public static final String OCR_OUTPUT_DIRECTORY = "ocr.outputDirectory";
+    public static final String OCR_TIMEOUT = "ocr.timeout";
+    public static final String OCR_MAXIMUM_PROCESS_OUTPUT = "ocr.maximumProcessOutputCharacters";
+    public static final String PROCESSING_MAXIMUM_ATTEMPTS = "processing.maximumAttempts";
+    public static final String PROCESSING_RETRY_DELAYS = "processing.retryDelays";
+    public static final String PROCESSING_WORK_DIRECTORY = "processing.workDirectory";
+    public static final String PROCESSING_MANUAL_REVIEW_DIRECTORY = "processing.manualReviewDirectory";
+    public static final String PROCESSING_ERROR_DIRECTORY = "processing.errorDirectory";
+    public static final String PROCESSING_MAXIMUM_ERROR_MESSAGE = "processing.maximumErrorMessageCharacters";
     public static final String AI_PROVIDER = "ai.provider";
     public static final String AI_MODEL = "ai.model";
     public static final String AI_TEMPERATURE = "ai.temperature";
@@ -61,6 +69,7 @@ public class ConfigurationLoader {
             Map.entry("INVOICE_OCR_COMMAND", OCR_COMMAND),
             Map.entry("INVOICE_OCR_LANGUAGE", OCR_LANGUAGE),
             Map.entry("INVOICE_OCR_OUTPUT_DIRECTORY", OCR_OUTPUT_DIRECTORY),
+            Map.entry("INVOICE_OCR_TIMEOUT", OCR_TIMEOUT),
             Map.entry("INVOICE_LOG_LEVEL", LOGGING_LEVEL));
 
     private final Function<String, String> environmentLookup;
@@ -155,6 +164,15 @@ public class ConfigurationLoader {
         properties.setProperty(OCR_LANGUAGE, "deu");
         properties.setProperty(OCR_COMMAND, "ocrmypdf");
         properties.setProperty(OCR_OUTPUT_DIRECTORY, "ocr");
+        properties.setProperty(OCR_TIMEOUT, "5m");
+        properties.setProperty(OCR_MAXIMUM_PROCESS_OUTPUT,
+                Integer.toString(OcrConfiguration.DEFAULT_MAXIMUM_PROCESS_OUTPUT_CHARACTERS));
+        properties.setProperty(PROCESSING_MAXIMUM_ATTEMPTS, "4");
+        properties.setProperty(PROCESSING_RETRY_DELAYS, "1m,5m,30m");
+        properties.setProperty(PROCESSING_WORK_DIRECTORY, "work");
+        properties.setProperty(PROCESSING_MANUAL_REVIEW_DIRECTORY, "manual-review");
+        properties.setProperty(PROCESSING_ERROR_DIRECTORY, "error");
+        properties.setProperty(PROCESSING_MAXIMUM_ERROR_MESSAGE, "1024");
         properties.setProperty(AI_PROVIDER, AiConfiguration.PROVIDER_MOCK);
         properties.setProperty(AI_MODEL, "gpt-5");
         properties.setProperty(AI_TEMPERATURE, "0.0");
@@ -188,7 +206,8 @@ public class ConfigurationLoader {
                 watch(properties),
                 api(properties),
                 ui(properties),
-                logging(properties));
+                logging(properties),
+                processing(properties));
     }
 
     private void applyEnvironment(final Properties properties) {
@@ -209,10 +228,29 @@ public class ConfigurationLoader {
     }
 
     private OcrConfiguration ocr(final Properties properties) {
+        final DurationParser durationParser = new DurationParser();
         return new OcrConfiguration(
                 text(properties, OCR_LANGUAGE),
                 text(properties, OCR_COMMAND),
-                path(properties, OCR_OUTPUT_DIRECTORY));
+                path(properties, OCR_OUTPUT_DIRECTORY),
+                durationParser.parse(text(properties, OCR_TIMEOUT), OCR_TIMEOUT),
+                positiveInteger(properties, OCR_MAXIMUM_PROCESS_OUTPUT));
+    }
+
+    private ProcessingConfiguration processing(final Properties properties) {
+        final DurationParser durationParser = new DurationParser();
+        final java.util.List<java.time.Duration> retryDelays = java.util.Arrays.stream(
+                        text(properties, PROCESSING_RETRY_DELAYS).split(","))
+                .map(String::trim)
+                .map(value -> durationParser.parse(value, PROCESSING_RETRY_DELAYS))
+                .toList();
+        return new ProcessingConfiguration(
+                positiveInteger(properties, PROCESSING_MAXIMUM_ATTEMPTS),
+                retryDelays,
+                path(properties, PROCESSING_WORK_DIRECTORY),
+                path(properties, PROCESSING_MANUAL_REVIEW_DIRECTORY),
+                path(properties, PROCESSING_ERROR_DIRECTORY),
+                positiveInteger(properties, PROCESSING_MAXIMUM_ERROR_MESSAGE));
     }
 
     private AiConfiguration ai(final Properties properties) {

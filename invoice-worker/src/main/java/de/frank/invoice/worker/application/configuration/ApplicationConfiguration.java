@@ -16,6 +16,7 @@ import java.util.Objects;
  * @param api read-only API configuration
  * @param ui browser export UI configuration
  * @param logging logging configuration
+ * @param processing resilient processing configuration
  */
 public record ApplicationConfiguration(
         ArchiveConfiguration archive,
@@ -26,7 +27,8 @@ public record ApplicationConfiguration(
         WatchConfiguration watch,
         ApiConfiguration api,
         UiConfiguration ui,
-        LoggingConfiguration logging) {
+        LoggingConfiguration logging,
+        ProcessingConfiguration processing) {
 
     /**
      * Creates application configuration with default logging configuration.
@@ -52,7 +54,8 @@ public record ApplicationConfiguration(
                 defaultWatchConfiguration(),
                 defaultApiConfiguration(),
                 defaultUiConfiguration(),
-                new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL));
+                new LoggingConfiguration(LoggingConfiguration.DEFAULT_LEVEL),
+                ProcessingConfiguration.defaults());
     }
 
     /**
@@ -67,7 +70,24 @@ public record ApplicationConfiguration(
             final WatchConfiguration watch,
             final ApiConfiguration api,
             final LoggingConfiguration logging) {
-        this(archive, persistence, ocr, ai, batch, watch, api, defaultUiConfiguration(), logging);
+        this(archive, persistence, ocr, ai, batch, watch, api, defaultUiConfiguration(), logging,
+                ProcessingConfiguration.defaults());
+    }
+
+    /**
+     * Compatibility constructor for configurations created before resilient processing support.
+     */
+    public ApplicationConfiguration(
+            final ArchiveConfiguration archive,
+            final PersistenceConfiguration persistence,
+            final OcrConfiguration ocr,
+            final AiConfiguration ai,
+            final BatchConfiguration batch,
+            final WatchConfiguration watch,
+            final ApiConfiguration api,
+            final UiConfiguration ui,
+            final LoggingConfiguration logging) {
+        this(archive, persistence, ocr, ai, batch, watch, api, ui, logging, ProcessingConfiguration.defaults());
     }
 
     /**
@@ -83,6 +103,7 @@ public record ApplicationConfiguration(
         Objects.requireNonNull(api, "api must not be null");
         Objects.requireNonNull(ui, "ui must not be null");
         Objects.requireNonNull(logging, "logging must not be null");
+        Objects.requireNonNull(processing, "processing must not be null");
     }
 
     private static WatchConfiguration defaultWatchConfiguration() {
