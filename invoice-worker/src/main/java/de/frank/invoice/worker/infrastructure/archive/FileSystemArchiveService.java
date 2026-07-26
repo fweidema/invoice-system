@@ -8,6 +8,8 @@ import de.frank.invoice.worker.domain.invoice.Invoice;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.StandardCopyOption;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.regex.Pattern;
@@ -62,10 +64,18 @@ public class FileSystemArchiveService implements ArchiveService {
         final Path targetFile = uniqueTargetFile(targetDirectory, fileName(invoice));
         try {
             Files.createDirectories(targetDirectory);
-            Files.move(sourceFile, targetFile);
+            moveWithoutOverwrite(sourceFile, targetFile);
             return new ArchiveResult(true, targetFile, "Document archived successfully.");
         } catch (IOException exception) {
             throw new ArchiveException("Could not archive document: " + sourceFile, exception);
+        }
+    }
+
+    private void moveWithoutOverwrite(final Path sourceFile, final Path targetFile) throws IOException {
+        try {
+            Files.move(sourceFile, targetFile, StandardCopyOption.ATOMIC_MOVE);
+        } catch (AtomicMoveNotSupportedException exception) {
+            Files.move(sourceFile, targetFile);
         }
     }
 

@@ -59,8 +59,8 @@ backup/
 *.db
 *.sqlite
 logs/
-archive/
-input/
+/archive/
+/input/
 /ocr/
 
 ### Vaadin frontend build ###

@@ -14,6 +14,9 @@ import de.frank.invoice.worker.application.mapping.InvoiceMapper;
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
 import de.frank.invoice.worker.application.pipeline.OcrStep;
 import de.frank.invoice.worker.application.pipeline.TextExtractionStep;
+import de.frank.invoice.worker.application.processing.ProcessingErrorClassifier;
+import de.frank.invoice.worker.application.processing.ProcessingStateTracker;
+import de.frank.invoice.worker.application.processing.RetryPolicy;
 import de.frank.invoice.worker.application.validation.InvoiceValidator;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingWorkflow;
 import de.frank.invoice.worker.infrastructure.ai.mock.MockAiClient;
@@ -28,7 +31,9 @@ import de.frank.invoice.worker.infrastructure.pdf.MockPdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingStateRepository;
 
+import java.time.Clock;
 import java.util.Objects;
 
 /**
@@ -87,6 +92,13 @@ public class InvoiceWorkerFactory {
         Objects.requireNonNull(listener, "listener must not be null");
 
         final InvoiceRepository invoiceRepository = new SQLiteInvoiceRepository(configuration.persistence().databaseFile());
+        final Clock clock = Clock.systemUTC();
+        final ProcessingStateTracker stateTracker = new ProcessingStateTracker(
+                new SQLiteProcessingStateRepository(configuration.persistence().databaseFile()),
+                new RetryPolicy(configuration.processing(), clock),
+                new ProcessingErrorClassifier(),
+                configuration.processing(),
+                clock);
         final DocumentProcessingWorkflow workflow = new DocumentProcessingWorkflow(
                 new OcrStep(createOcrService(configuration, skipOcr), configuration.ocr().outputDirectory()),
                 new TextExtractionStep(createPdfTextExtractor(mockText)),
@@ -104,7 +116,8 @@ public class InvoiceWorkerFactory {
                 invoiceRepository,
                 new FileSystemArchiveService(configuration.archive().archiveDirectory()),
                 new SQLiteProcessingHistoryRepository(configuration.persistence().databaseFile()),
-                java.time.Clock.systemUTC());
+                clock,
+                stateTracker);
         final BatchProcessor batchProcessor = new BatchProcessor(workflow, listener);
         final BatchProcessingApplicationService applicationService = new BatchProcessingApplicationService(
                 new DocumentImporter(),

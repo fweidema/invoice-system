@@ -30,6 +30,19 @@ public interface InvoiceRepository {
     Optional<Invoice> findByInvoiceNumber(String invoiceNumber);
 
     /**
+     * Finds an invoice by the authoritative source content hash.
+     *
+     * @param fileHash source content hash
+     * @return invoice, if present
+     */
+    default Optional<Invoice> findByFileHash(final String fileHash) {
+        Objects.requireNonNull(fileHash, "fileHash must not be null");
+        return findAll().stream()
+                .filter(invoice -> fileHash.equals(invoice.document().fileHash()))
+                .findFirst();
+    }
+
+    /**
      * Loads all stored invoices.
      *
      * @return stored invoices

@@ -121,6 +121,12 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             WHERE invoice_number = ?
             """;
 
+    private static final String SELECT_BY_FILE_HASH = """
+            SELECT * FROM invoices
+            WHERE file_hash = ?
+            LIMIT 1
+            """;
+
     private static final String SELECT_ALL = """
             SELECT * FROM invoices
             ORDER BY id
@@ -211,6 +217,20 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             }
         } catch (SQLException exception) {
             throw new PersistenceException("Could not load invoice with number: " + invoiceNumber, exception);
+        }
+    }
+
+    @Override
+    public Optional<Invoice> findByFileHash(final String fileHash) {
+        Objects.requireNonNull(fileHash, "fileHash must not be null");
+        try (Connection connection = openConnection();
+             PreparedStatement statement = connection.prepareStatement(SELECT_BY_FILE_HASH)) {
+            statement.setString(1, fileHash);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() ? Optional.of(mapInvoice(resultSet)) : Optional.empty();
+            }
+        } catch (SQLException exception) {
+            throw new PersistenceException("Could not load invoice for file hash", exception);
         }
     }
 

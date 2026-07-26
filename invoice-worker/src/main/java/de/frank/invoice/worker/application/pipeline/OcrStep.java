@@ -33,9 +33,21 @@ public class OcrStep implements PipelineStep<Document> {
      */
     @Override
     public Document process(final Document input) {
-        Objects.requireNonNull(input, "input must not be null");
+        return process(input, outputDirectory);
+    }
 
-        final Path ocrPath = ocrService.createSearchablePdf(input, outputDirectory);
+    /**
+     * Creates a searchable PDF in a processing-specific work directory.
+     *
+     * @param input imported document
+     * @param processingOutputDirectory processing-specific output directory
+     * @return updated document
+     */
+    public Document process(final Document input, final Path processingOutputDirectory) {
+        Objects.requireNonNull(input, "input must not be null");
+        Objects.requireNonNull(processingOutputDirectory, "processingOutputDirectory must not be null");
+
+        final Path ocrPath = ocrService.createSearchablePdf(input, processingOutputDirectory);
         return new Document(
                 input.id(),
                 input.originalPath(),
@@ -46,4 +58,3 @@ public class OcrStep implements PipelineStep<Document> {
                 input.importedAt());
     }
 }
-

@@ -15,6 +15,7 @@ import de.frank.invoice.worker.application.persistence.InvoiceRepository;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
 import de.frank.invoice.worker.application.pipeline.OcrStep;
 import de.frank.invoice.worker.application.pipeline.TextExtractionStep;
+import de.frank.invoice.worker.application.processing.ProcessingStateTracker;
 import de.frank.invoice.worker.application.validation.InvoiceValidator;
 import de.frank.invoice.worker.application.validation.ValidationMessage;
 import de.frank.invoice.worker.application.validation.ValidationResult;
@@ -23,6 +24,8 @@ import de.frank.invoice.worker.domain.document.ExtractedDocument;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 import de.frank.invoice.worker.domain.processing.ProcessingHistoryEntry;
 import de.frank.invoice.worker.domain.processing.ProcessingStatus;
+import de.frank.invoice.worker.domain.processing.ProcessingStage;
+import de.frank.invoice.worker.domain.processing.ProcessingState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -54,6 +57,7 @@ public class DocumentProcessingWorkflow {
     private final ArchiveService archiveService;
     private final ProcessingHistoryRepository processingHistoryRepository;
     private final Clock clock;
+    private final ProcessingStateTracker stateTracker;
 
     /**
      * Creates a document processing workflow.
@@ -92,7 +96,8 @@ public class DocumentProcessingWorkflow {
                 invoiceRepository,
                 archiveService,
                 ProcessingHistoryRepository.NO_OP,
-                Clock.systemUTC());
+                Clock.systemUTC(),
+                null);
     }
 
     /**
@@ -124,6 +129,29 @@ public class DocumentProcessingWorkflow {
             final ArchiveService archiveService,
             final ProcessingHistoryRepository processingHistoryRepository,
             final Clock clock) {
+        this(
+                ocrStep, textExtractionStep, requestFactory, aiClient, responseMapper, invoiceMapper,
+                invoiceValidator, duplicateDetector, invoiceRepository, archiveService,
+                processingHistoryRepository, clock, null);
+    }
+
+    /**
+     * Creates a workflow with durable audit history and resumable current-state tracking.
+     */
+    public DocumentProcessingWorkflow(
+            final OcrStep ocrStep,
+            final TextExtractionStep textExtractionStep,
+            final InvoiceExtractionRequestFactory requestFactory,
+            final AiClient aiClient,
+            final InvoiceExtractionResponseMapper responseMapper,
+            final InvoiceMapper invoiceMapper,
+            final InvoiceValidator invoiceValidator,
+            final DuplicateDetector duplicateDetector,
+            final InvoiceRepository invoiceRepository,
+            final ArchiveService archiveService,
+            final ProcessingHistoryRepository processingHistoryRepository,
+            final Clock clock,
+            final ProcessingStateTracker stateTracker) {
         this.ocrStep = Objects.requireNonNull(ocrStep, "ocrStep must not be null");
         this.textExtractionStep = Objects.requireNonNull(textExtractionStep, "textExtractionStep must not be null");
         this.requestFactory = Objects.requireNonNull(requestFactory, "requestFactory must not be null");
@@ -138,6 +166,7 @@ public class DocumentProcessingWorkflow {
                 processingHistoryRepository,
                 "processingHistoryRepository must not be null");
         this.clock = Objects.requireNonNull(clock, "clock must not be null");
+        this.stateTracker = stateTracker;
     }
 
     /**
@@ -151,23 +180,72 @@ public class DocumentProcessingWorkflow {
 
         final Instant startedAt = Instant.now(clock);
         final List<String> messages = new ArrayList<>();
+        ProcessingState state = null;
         try {
+            if (stateTracker != null) {
+                final ProcessingStateTracker.ProcessingAdmission admission = stateTracker.admit(document);
+                state = admission.state();
+                if (!admission.process()) {
+                    messages.add(admission.duplicate()
+                            ? "Content duplicate already archived."
+                            : "Retry is not due yet.");
+                    return complete(document, failedResult(messages,
+                            admission.duplicate() ? ProcessingStatus.DUPLICATE : ProcessingStatus.RETRY_PENDING), startedAt);
+                }
+                if (state.lastErrorCode() == de.frank.invoice.worker.domain.processing.ProcessingErrorCode.ARCHIVE_MOVE_FAILED) {
+                    final java.util.Optional<Invoice> persistedInvoice = invoiceRepository.findByFileHash(document.fileHash());
+                    if (persistedInvoice.isPresent()) {
+                        messages.add(PERSISTENCE_SUCCESS_MESSAGE);
+                        return complete(
+                                document,
+                                archive(document, persistedInvoice.orElseThrow(), null, messages, state),
+                                startedAt);
+                    }
+                }
+            }
             final Document ocrDocument;
             try {
-                ocrDocument = ocrStep.process(document);
+                final java.util.Optional<Document> reusable = stateTracker == null
+                        ? java.util.Optional.empty() : stateTracker.reusableOcrDocument(document, state);
+                if (reusable.isPresent()) {
+                    ocrDocument = reusable.orElseThrow();
+                } else {
+                    if (stateTracker != null) {
+                        state = stateTracker.transition(state, ProcessingStatus.OCR_RUNNING, null, null);
+                    }
+                    ocrDocument = stateTracker == null
+                            ? ocrStep.process(document)
+                            : ocrStep.process(document, stateTracker.workDirectory(state));
+                    if (stateTracker != null) {
+                        state = stateTracker.transition(state, ProcessingStatus.OCR_COMPLETED, ocrDocument.ocrPath(), null);
+                    }
+                }
             } catch (RuntimeException exception) {
-                LOG.error("OCR failed for document {}", document.originalFilename(), exception);
+                if (stateTracker != null && state != null) {
+                    state = stateTracker.fail(state, ProcessingStage.OCR, exception);
+                }
+                LOG.error("processingId={} documentId={} processingStage=OCR result=failed errorCode={}",
+                        state == null ? document.id() : state.processingId(), document.id(),
+                        state == null || state.lastErrorCode() == null ? "OCR_FAILED" : state.lastErrorCode(), exception);
                 messages.add("OCR failed: " + exception.getMessage());
-                return complete(document, failedResult(messages, ProcessingStatus.OCR_FAILED), startedAt);
+                return complete(document, failedResult(messages,
+                        state == null ? ProcessingStatus.OCR_FAILED : state.status()), startedAt);
             }
 
             final ExtractedDocument extractedDocument;
             try {
+                if (stateTracker != null) {
+                    state = stateTracker.transition(state, ProcessingStatus.EXTRACTION_RUNNING, null, null);
+                }
                 extractedDocument = textExtractionStep.process(ocrDocument);
             } catch (RuntimeException exception) {
+                if (stateTracker != null) {
+                    state = stateTracker.fail(state, ProcessingStage.EXTRACTION, exception);
+                }
                 LOG.error("Text extraction failed for document {}", document.originalFilename(), exception);
                 messages.add("Text extraction failed: " + exception.getMessage());
-                return complete(document, failedResult(messages, ProcessingStatus.ERROR), startedAt);
+                return complete(document, failedResult(messages,
+                        state == null ? ProcessingStatus.ERROR : state.status()), startedAt);
             }
 
             final InvoiceExtractionResponse extractionResponse;
@@ -176,18 +254,28 @@ public class DocumentProcessingWorkflow {
                 final AiClientResponse aiResponse = aiClient.analyze(request);
                 extractionResponse = responseMapper.map(aiResponse);
             } catch (RuntimeException exception) {
+                if (stateTracker != null) {
+                    state = stateTracker.fail(state, ProcessingStage.EXTRACTION, exception);
+                }
                 LOG.error("AI analysis failed for document {}", document.originalFilename(), exception);
                 messages.add("AI failed: " + exception.getMessage());
-                return complete(document, failedResult(messages, ProcessingStatus.AI_FAILED), startedAt);
+                return complete(document, failedResult(messages,
+                        state == null ? ProcessingStatus.AI_FAILED : state.status()), startedAt);
             }
 
             final Invoice invoice;
             try {
                 invoice = invoiceMapper.map(ocrDocument, extractionResponse);
             } catch (RuntimeException exception) {
+                if (stateTracker != null) {
+                    state = stateTracker.fail(state, ProcessingStage.EXTRACTION, exception);
+                }
                 LOG.error("Invoice mapping failed for document {}", document.originalFilename(), exception);
                 messages.add("Invoice mapping failed: " + exception.getMessage());
                 return complete(document, failedResult(messages, ProcessingStatus.ERROR), startedAt);
+            }
+            if (stateTracker != null) {
+                state = stateTracker.transition(state, ProcessingStatus.EXTRACTION_COMPLETED, null, null);
             }
 
             final ValidationResult validationResult = invoiceValidator.validate(invoice);
@@ -221,7 +309,8 @@ public class DocumentProcessingWorkflow {
                         startedAt);
             }
 
-            return complete(ocrDocument, persistAndArchive(ocrDocument, invoice, duplicateCheckResult, messages), startedAt);
+            return complete(ocrDocument,
+                    persistAndArchive(ocrDocument, invoice, duplicateCheckResult, messages, state), startedAt);
         } catch (RuntimeException exception) {
             LOG.error("Workflow failed for document {}", document.originalFilename(), exception);
             messages.add("Workflow failed: " + exception.getMessage());
@@ -233,7 +322,8 @@ public class DocumentProcessingWorkflow {
             final Document document,
             final Invoice invoice,
             final DuplicateCheckResult duplicateCheckResult,
-            final List<String> messages) {
+            final List<String> messages,
+            final ProcessingState state) {
         LOG.debug("Persistence started for document {}", document.originalFilename());
         try {
             invoiceRepository.save(invoice);
@@ -247,21 +337,36 @@ public class DocumentProcessingWorkflow {
 
         LOG.debug("Persistence succeeded for document {}", document.originalFilename());
         messages.add(PERSISTENCE_SUCCESS_MESSAGE);
-        return archive(document, invoice, duplicateCheckResult, messages);
+        return archive(document, invoice, duplicateCheckResult, messages, state);
     }
 
     private DocumentProcessingResult archive(
             final Document document,
             final Invoice invoice,
             final DuplicateCheckResult duplicateCheckResult,
-            final List<String> messages) {
+            final List<String> messages,
+            final ProcessingState state) {
         try {
             final ArchiveResult archiveResult = archiveService.archive(document, invoice);
+            if (stateTracker != null) {
+                final ProcessingState archivedState = stateTracker.transition(
+                        state, ProcessingStatus.ARCHIVED, null,
+                        archiveResult.archivedFile() == null ? null : archiveResult.archivedFile().toString());
+                try {
+                    stateTracker.cleanupWorkDirectory(archivedState);
+                } catch (RuntimeException cleanupFailure) {
+                    LOG.warn("processingId={} processingStage=CLEANUP result=failed",
+                            archivedState.processingId(), cleanupFailure);
+                }
+            }
             LOG.info("Document archived: {}", document.originalFilename());
             messages.add(archiveResult.message());
             return result(true, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, archiveResult, messages, invoice,
                     ProcessingStatus.SUCCESS);
         } catch (RuntimeException exception) {
+            if (stateTracker != null) {
+                stateTracker.fail(state, ProcessingStage.ARCHIVE, exception);
+            }
             LOG.error("Archiving failed for document {}", document.originalFilename(), exception);
             messages.add("Archive failed: " + exception.getMessage());
             return result(false, true, PERSISTENCE_SUCCESS_MESSAGE, duplicateCheckResult, null, messages, invoice,
