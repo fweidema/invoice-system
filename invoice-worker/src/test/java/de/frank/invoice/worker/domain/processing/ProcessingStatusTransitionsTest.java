@@ -15,6 +15,18 @@ class ProcessingStatusTransitionsTest {
     }
 
     @Test
+    void allowsDuplicateDetectionToFinishRunningExtraction() {
+        assertThat(ProcessingStatusTransitions.canTransition(
+                ProcessingStatus.EXTRACTION_RUNNING, ProcessingStatus.DUPLICATE)).isTrue();
+    }
+
+    @Test
+    void rejectsDuplicateAfterExtractionWasAlreadyCompleted() {
+        assertThat(ProcessingStatusTransitions.canTransition(
+                ProcessingStatus.EXTRACTION_COMPLETED, ProcessingStatus.DUPLICATE)).isFalse();
+    }
+
+    @Test
     void rejectsContradictoryTransition() {
         assertThatThrownBy(() -> ProcessingStatusTransitions.requireValid(
                 ProcessingStatus.RECEIVED, ProcessingStatus.ARCHIVED))

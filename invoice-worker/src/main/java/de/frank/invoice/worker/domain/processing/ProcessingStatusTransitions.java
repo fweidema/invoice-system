@@ -39,7 +39,7 @@ public final class ProcessingStatusTransitions {
                 ProcessingStatus.EXTRACTION_RUNNING, ProcessingStatus.RETRY_PENDING,
                 ProcessingStatus.FAILED, ProcessingStatus.MANUAL_REVIEW));
         transitions.put(ProcessingStatus.EXTRACTION_RUNNING, EnumSet.of(
-                ProcessingStatus.EXTRACTION_COMPLETED, ProcessingStatus.RETRY_PENDING,
+                ProcessingStatus.EXTRACTION_COMPLETED, ProcessingStatus.DUPLICATE, ProcessingStatus.RETRY_PENDING,
                 ProcessingStatus.FAILED, ProcessingStatus.MANUAL_REVIEW));
         transitions.put(ProcessingStatus.EXTRACTION_COMPLETED, EnumSet.of(
                 ProcessingStatus.ARCHIVED, ProcessingStatus.RETRY_PENDING,

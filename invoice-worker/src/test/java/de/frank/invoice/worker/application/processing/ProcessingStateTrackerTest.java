@@ -87,6 +87,23 @@ class ProcessingStateTrackerTest {
         assertThat(admission.duplicate()).isTrue();
     }
 
+    @Test
+    void duplicateContentIsRejectedByHashWithoutRestartingProcessing() {
+        final InMemoryStateRepository repository = new InMemoryStateRepository();
+        final ProcessingStateTracker tracker = tracker(repository, NOW);
+        ProcessingState state = tracker.admit(document()).state();
+        state = tracker.transition(state, ProcessingStatus.OCR_RUNNING, null, null);
+        state = tracker.transition(state, ProcessingStatus.OCR_COMPLETED, "/work/ocr.pdf", null);
+        state = tracker.transition(state, ProcessingStatus.EXTRACTION_RUNNING, null, null);
+        tracker.transition(state, ProcessingStatus.DUPLICATE, null, null);
+
+        final ProcessingStateTracker.ProcessingAdmission admission = tracker.admit(document());
+
+        assertThat(admission.process()).isFalse();
+        assertThat(admission.duplicate()).isTrue();
+        assertThat(admission.state().status()).isEqualTo(ProcessingStatus.DUPLICATE);
+    }
+
     private ProcessingStateTracker tracker(final ProcessingStateRepository repository, final Instant now) {
         final ProcessingConfiguration configuration = new ProcessingConfiguration(
                 4, List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(30)),

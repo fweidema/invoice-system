@@ -52,7 +52,7 @@ public class ProcessingStateTracker {
         final Optional<ProcessingState> existing = repository.findByFileHash(document.fileHash());
         if (existing.isPresent()) {
             final ProcessingState state = existing.orElseThrow();
-            if (state.status() == ProcessingStatus.ARCHIVED) {
+            if (state.status() == ProcessingStatus.ARCHIVED || state.status() == ProcessingStatus.DUPLICATE) {
                 return new ProcessingAdmission(state, false, true);
             }
             if (state.status() == ProcessingStatus.RETRY_PENDING && !retryPolicy.isDue(state.nextRetryAt())) {

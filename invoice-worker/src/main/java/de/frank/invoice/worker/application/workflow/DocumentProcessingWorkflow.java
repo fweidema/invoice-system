@@ -274,13 +274,12 @@ public class DocumentProcessingWorkflow {
                 messages.add("Invoice mapping failed: " + exception.getMessage());
                 return complete(document, failedResult(messages, ProcessingStatus.ERROR), startedAt);
             }
-            if (stateTracker != null) {
-                state = stateTracker.transition(state, ProcessingStatus.EXTRACTION_COMPLETED, null, null);
-            }
-
             final ValidationResult validationResult = invoiceValidator.validate(invoice);
             addValidationMessages(messages, validationResult);
             if (!validationResult.valid()) {
+                if (stateTracker != null) {
+                    stateTracker.transition(state, ProcessingStatus.EXTRACTION_COMPLETED, null, null);
+                }
                 LOG.warn("Invoice validation failed for document {}", document.originalFilename());
                 messages.add("Invoice validation failed. Persistence skipped.");
                 return complete(
@@ -300,6 +299,9 @@ public class DocumentProcessingWorkflow {
             }
             messages.add(duplicateCheckResult.message());
             if (duplicateCheckResult.duplicate()) {
+                if (stateTracker != null) {
+                    stateTracker.transition(state, ProcessingStatus.DUPLICATE, null, null);
+                }
                 LOG.warn("Duplicate invoice detected for document {}", document.originalFilename());
                 messages.add("Duplicate invoice detected. Persistence skipped.");
                 return complete(
@@ -307,6 +309,9 @@ public class DocumentProcessingWorkflow {
                         result(false, false, PERSISTENCE_SKIPPED_MESSAGE, duplicateCheckResult, null, messages, invoice,
                                 ProcessingStatus.DUPLICATE),
                         startedAt);
+            }
+            if (stateTracker != null) {
+                state = stateTracker.transition(state, ProcessingStatus.EXTRACTION_COMPLETED, null, null);
             }
 
             return complete(ocrDocument,

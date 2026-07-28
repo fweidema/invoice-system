@@ -6,12 +6,17 @@ import de.frank.invoice.worker.application.ai.request.InvoiceExtractionRequestFa
 import de.frank.invoice.worker.application.ai.response.InvoiceExtractionResponseMapper;
 import de.frank.invoice.worker.application.archive.ArchiveResult;
 import de.frank.invoice.worker.application.archive.ArchiveService;
+import de.frank.invoice.worker.application.configuration.ProcessingConfiguration;
 import de.frank.invoice.worker.application.duplicate.DuplicateCheckResult;
 import de.frank.invoice.worker.application.duplicate.DuplicateDetector;
 import de.frank.invoice.worker.application.mapping.InvoiceMapper;
 import de.frank.invoice.worker.application.persistence.InvoiceRepository;
+import de.frank.invoice.worker.application.persistence.ProcessingStateRepository;
 import de.frank.invoice.worker.application.pipeline.OcrStep;
 import de.frank.invoice.worker.application.pipeline.TextExtractionStep;
+import de.frank.invoice.worker.application.processing.ProcessingErrorClassifier;
+import de.frank.invoice.worker.application.processing.ProcessingStateTracker;
+import de.frank.invoice.worker.application.processing.RetryPolicy;
 import de.frank.invoice.worker.application.validation.InvoiceValidator;
 import de.frank.invoice.worker.application.validation.ValidationMessage;
 import de.frank.invoice.worker.application.validation.ValidationResult;
@@ -20,13 +25,19 @@ import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
 import de.frank.invoice.worker.domain.invoice.Invoice;
+import de.frank.invoice.worker.domain.processing.ProcessingState;
+import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.math.BigDecimal;
 import java.nio.file.Path;
+import java.time.Clock;
+import java.time.Duration;
 import java.time.Instant;
 import java.time.LocalDate;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -34,6 +45,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 
 class DocumentProcessingWorkflowTest {
+
+    @TempDir
+    private Path tempDirectory;
 
     @Test
     void processPersistsAndArchivesInvoiceWhenNoDuplicateIsDetected() {
@@ -81,6 +95,60 @@ class DocumentProcessingWorkflowTest {
         assertThat(result.duplicateCheckResult()).isNotNull();
         assertThat(result.duplicateCheckResult().duplicate()).isTrue();
         assertThat(result.archiveResult()).isNull();
+    }
+
+    @Test
+    void processStoresDuplicateInsteadOfExtractionCompletedWhenDuplicateIsDetected() {
+        // Arrange
+        final CountingInvoiceRepository invoiceRepository = new CountingInvoiceRepository();
+        invoiceRepository.fileHashExists = true;
+        final RecordingProcessingStateRepository stateRepository = new RecordingProcessingStateRepository();
+        final DocumentProcessingWorkflow workflow = workflow(
+                invoiceRepository,
+                new DuplicateDetector(invoiceRepository),
+                new CountingArchiveService(),
+                new InvoiceValidator(),
+                stateTracker(stateRepository));
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(result.status()).isEqualTo(ProcessingStatus.DUPLICATE);
+        assertThat(invoiceRepository.saveCount()).isZero();
+        assertThat(stateRepository.statuses()).containsExactly(
+                ProcessingStatus.RECEIVED,
+                ProcessingStatus.OCR_RUNNING,
+                ProcessingStatus.OCR_COMPLETED,
+                ProcessingStatus.EXTRACTION_RUNNING,
+                ProcessingStatus.DUPLICATE);
+    }
+
+    @Test
+    void processStoresExtractionCompletedAfterSuccessfulDuplicateCheck() {
+        // Arrange
+        final CountingInvoiceRepository invoiceRepository = new CountingInvoiceRepository();
+        final RecordingProcessingStateRepository stateRepository = new RecordingProcessingStateRepository();
+        final DocumentProcessingWorkflow workflow = workflow(
+                invoiceRepository,
+                new DuplicateDetector(invoiceRepository),
+                new CountingArchiveService(),
+                new InvoiceValidator(),
+                stateTracker(stateRepository));
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(result.status()).isEqualTo(ProcessingStatus.SUCCESS);
+        assertThat(invoiceRepository.saveCount()).isEqualTo(1);
+        assertThat(stateRepository.statuses()).containsExactly(
+                ProcessingStatus.RECEIVED,
+                ProcessingStatus.OCR_RUNNING,
+                ProcessingStatus.OCR_COMPLETED,
+                ProcessingStatus.EXTRACTION_RUNNING,
+                ProcessingStatus.EXTRACTION_COMPLETED,
+                ProcessingStatus.ARCHIVED);
     }
 
     @Test
@@ -185,6 +253,45 @@ class DocumentProcessingWorkflowTest {
                 duplicateDetector,
                 invoiceRepository,
                 archiveService);
+    }
+
+    private DocumentProcessingWorkflow workflow(
+            final InvoiceRepository invoiceRepository,
+            final DuplicateDetector duplicateDetector,
+            final ArchiveService archiveService,
+            final InvoiceValidator invoiceValidator,
+            final ProcessingStateTracker stateTracker) {
+        return new DocumentProcessingWorkflow(
+                ocrStep(),
+                textExtractionStep(),
+                requestFactory(),
+                aiClient(),
+                new InvoiceExtractionResponseMapper(),
+                new InvoiceMapper(),
+                invoiceValidator,
+                duplicateDetector,
+                invoiceRepository,
+                archiveService,
+                de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository.NO_OP,
+                Clock.fixed(Instant.parse("2026-06-27T10:00:00Z"), ZoneOffset.UTC),
+                stateTracker);
+    }
+
+    private ProcessingStateTracker stateTracker(final ProcessingStateRepository repository) {
+        final ProcessingConfiguration configuration = new ProcessingConfiguration(
+                4,
+                List.of(Duration.ofMinutes(1), Duration.ofMinutes(5), Duration.ofMinutes(30)),
+                tempDirectory.resolve("work"),
+                tempDirectory.resolve("manual-review"),
+                tempDirectory.resolve("error"),
+                128);
+        final Clock clock = Clock.fixed(Instant.parse("2026-06-27T10:00:00Z"), ZoneOffset.UTC);
+        return new ProcessingStateTracker(
+                repository,
+                new RetryPolicy(configuration, clock),
+                new ProcessingErrorClassifier(),
+                configuration,
+                clock);
     }
 
     private OcrStep ocrStep() {
@@ -310,6 +417,30 @@ class DocumentProcessingWorkflowTest {
 
         int archiveCount() {
             return archiveCount;
+        }
+    }
+
+    private static final class RecordingProcessingStateRepository implements ProcessingStateRepository {
+
+        private final List<ProcessingState> states = new ArrayList<>();
+
+        @Override
+        public void save(final ProcessingState state) {
+            states.add(state);
+        }
+
+        @Override
+        public Optional<ProcessingState> findByFileHash(final String fileHash) {
+            return Optional.empty();
+        }
+
+        @Override
+        public List<ProcessingState> findRetriesDueAt(final Instant timestamp) {
+            return List.of();
+        }
+
+        private List<ProcessingStatus> statuses() {
+            return states.stream().map(ProcessingState::status).toList();
         }
     }
 }
