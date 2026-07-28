@@ -68,6 +68,34 @@ class ProcessingStateTrackerTest {
     }
 
     @Test
+    void manualReviewIsNotAdmittedForAutomaticProcessing() {
+        final InMemoryStateRepository repository = new InMemoryStateRepository();
+        final ProcessingStateTracker tracker = tracker(repository, NOW);
+        final ProcessingState manualReview = state(ProcessingStatus.MANUAL_REVIEW, 4);
+        repository.save(manualReview);
+
+        final ProcessingStateTracker.ProcessingAdmission admission = tracker.admit(document());
+
+        assertThat(admission.process()).isFalse();
+        assertThat(admission.duplicate()).isFalse();
+        assertThat(admission.state()).isSameAs(manualReview);
+    }
+
+    @Test
+    void failReturnsExistingManualReviewWithoutIllegalSelfTransition() {
+        final InMemoryStateRepository repository = new InMemoryStateRepository();
+        final ProcessingStateTracker tracker = tracker(repository, NOW);
+        final ProcessingState manualReview = state(ProcessingStatus.MANUAL_REVIEW, 4);
+        repository.save(manualReview);
+
+        final ProcessingState failed =
+                tracker.fail(manualReview, ProcessingStage.OCR, new RuntimeException("process timed out"));
+
+        assertThat(failed).isSameAs(manualReview);
+        assertThat(repository.saveCount()).isEqualTo(1);
+    }
+
+    @Test
     void archivedContentIsRejectedByHashEvenWithDifferentFilename() {
         final InMemoryStateRepository repository = new InMemoryStateRepository();
         final ProcessingStateTracker tracker = tracker(repository, NOW);
@@ -121,12 +149,21 @@ class ProcessingStateTrackerTest {
                 DocumentType.UNKNOWN, "invoice.pdf", "same-hash", NOW);
     }
 
+    private ProcessingState state(final ProcessingStatus status, final int processingAttempts) {
+        return new ProcessingState(
+                "processing-id", document().id(), document().fileHash(), document().originalFilename(),
+                document().originalPath(), status, processingAttempts, null, null, null, null,
+                NOW, NOW, null, null, NOW);
+    }
+
     private static final class InMemoryStateRepository implements ProcessingStateRepository {
         private ProcessingState state;
+        private int saveCount;
 
         @Override
         public void save(final ProcessingState state) {
             this.state = state;
+            saveCount++;
         }
 
         @Override
@@ -137,6 +174,10 @@ class ProcessingStateTrackerTest {
         @Override
         public List<ProcessingState> findRetriesDueAt(final Instant timestamp) {
             return List.of();
+        }
+
+        private int saveCount() {
+            return saveCount;
         }
     }
 }
