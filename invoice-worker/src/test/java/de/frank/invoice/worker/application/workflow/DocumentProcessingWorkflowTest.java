@@ -184,6 +184,9 @@ class DocumentProcessingWorkflowTest {
 
         // Assert
         assertThat(result.successful()).isFalse();
+        assertThat(result.status()).isEqualTo(ProcessingStatus.MANUAL_REVIEW);
+        assertThat(result.messages()).contains("Document is awaiting manual review.");
+        assertThat(result.messages()).doesNotContain("Retry is not due yet.");
         assertThat(stateRepository.statuses()).containsExactly(ProcessingStatus.MANUAL_REVIEW);
     }
 
