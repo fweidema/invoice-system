@@ -55,6 +55,9 @@ public class ProcessingStateTracker {
             if (state.status() == ProcessingStatus.ARCHIVED || state.status() == ProcessingStatus.DUPLICATE) {
                 return new ProcessingAdmission(state, false, true);
             }
+            if (state.status() == ProcessingStatus.MANUAL_REVIEW) {
+                return new ProcessingAdmission(state, false, false);
+            }
             if (state.status() == ProcessingStatus.RETRY_PENDING && !retryPolicy.isDue(state.nextRetryAt())) {
                 return new ProcessingAdmission(state, false, false);
             }
@@ -94,6 +97,10 @@ public class ProcessingStateTracker {
             final RuntimeException failure) {
         final ProcessingErrorCode errorCode = errorClassifier.classify(stage, failure);
         final RetryPolicy.RetryDecision decision = retryPolicy.decide(errorCode, current.processingAttempts());
+        if (current.status() == ProcessingStatus.MANUAL_REVIEW
+                && decision.status() == ProcessingStatus.MANUAL_REVIEW) {
+            return current;
+        }
         ProcessingStatusTransitions.requireValid(current.status(), decision.status());
         final Instant now = Instant.now(clock);
         final String retainedSourcePath = terminalSourcePath(current, decision.status());

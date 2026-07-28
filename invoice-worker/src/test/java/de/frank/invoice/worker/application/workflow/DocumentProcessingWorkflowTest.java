@@ -152,6 +152,45 @@ class DocumentProcessingWorkflowTest {
     }
 
     @Test
+    void processDoesNotStartOcrForDocumentInManualReview() {
+        // Arrange
+        final CountingInvoiceRepository invoiceRepository = new CountingInvoiceRepository();
+        final RecordingProcessingStateRepository stateRepository = new RecordingProcessingStateRepository();
+        stateRepository.save(processingState(ProcessingStatus.MANUAL_REVIEW));
+        final OcrStep rejectingOcrStep =
+                new OcrStep((document, outputDirectory) -> Path.of(document.originalPath()), Path.of(".")) {
+                    @Override
+                    public Document process(final Document input, final Path processingOutputDirectory) {
+                        throw new AssertionError("OCR must not be started");
+                    }
+                };
+        final DocumentProcessingWorkflow workflow = new DocumentProcessingWorkflow(
+                rejectingOcrStep,
+                textExtractionStep(),
+                requestFactory(),
+                aiClient(),
+                new InvoiceExtractionResponseMapper(),
+                new InvoiceMapper(),
+                new InvoiceValidator(),
+                new DuplicateDetector(invoiceRepository),
+                invoiceRepository,
+                new CountingArchiveService(),
+                de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository.NO_OP,
+                Clock.fixed(Instant.parse("2026-06-27T10:00:00Z"), ZoneOffset.UTC),
+                stateTracker(stateRepository));
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(result.successful()).isFalse();
+        assertThat(result.status()).isEqualTo(ProcessingStatus.MANUAL_REVIEW);
+        assertThat(result.messages()).contains("Document is awaiting manual review.");
+        assertThat(result.messages()).doesNotContain("Retry is not due yet.");
+        assertThat(stateRepository.statuses()).containsExactly(ProcessingStatus.MANUAL_REVIEW);
+    }
+
+    @Test
     void processDoesNotArchiveInvoiceWhenValidationFails() {
         // Arrange
         final CountingInvoiceRepository repository = new CountingInvoiceRepository();
@@ -351,6 +390,14 @@ class DocumentProcessingWorkflowTest {
                 Instant.parse("2026-06-27T10:00:00Z"));
     }
 
+    private ProcessingState processingState(final ProcessingStatus status) {
+        final Instant timestamp = Instant.parse("2026-06-27T10:00:00Z");
+        return new ProcessingState(
+                "processing-id", document().id(), document().fileHash(), document().originalFilename(),
+                document().originalPath(), status, 4, null, null, null, null,
+                timestamp, timestamp, null, null, timestamp);
+    }
+
     private static final class CountingInvoiceRepository implements InvoiceRepository {
 
         private final List<Invoice> invoices = new ArrayList<>();
@@ -431,7 +478,9 @@ class DocumentProcessingWorkflowTest {
 
         @Override
         public Optional<ProcessingState> findByFileHash(final String fileHash) {
-            return Optional.empty();
+            return states.stream()
+                    .filter(state -> state.fileHash().equals(fileHash))
+                    .reduce((first, second) -> second);
         }
 
         @Override

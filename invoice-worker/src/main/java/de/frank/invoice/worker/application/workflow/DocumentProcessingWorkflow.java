@@ -188,9 +188,11 @@ public class DocumentProcessingWorkflow {
                 if (!admission.process()) {
                     messages.add(admission.duplicate()
                             ? "Content duplicate already archived."
-                            : "Retry is not due yet.");
+                            : state.status() == ProcessingStatus.MANUAL_REVIEW
+                                    ? "Document is awaiting manual review."
+                                    : "Retry is not due yet.");
                     return complete(document, failedResult(messages,
-                            admission.duplicate() ? ProcessingStatus.DUPLICATE : ProcessingStatus.RETRY_PENDING), startedAt);
+                            admission.duplicate() ? ProcessingStatus.DUPLICATE : state.status()), startedAt);
                 }
                 if (state.lastErrorCode() == de.frank.invoice.worker.domain.processing.ProcessingErrorCode.ARCHIVE_MOVE_FAILED) {
                     final java.util.Optional<Invoice> persistedInvoice = invoiceRepository.findByFileHash(document.fileHash());
