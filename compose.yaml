@@ -3,6 +3,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: ${INVOICE_VERSION:-development}
+        VCS_REF: ${INVOICE_VCS_REF:-unknown}
+        BUILD_DATE: ${INVOICE_BUILD_DATE:-unknown}
     restart: "no"
     mem_limit: 4g
     environment:
@@ -34,6 +38,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: ${INVOICE_VERSION:-development}
+        VCS_REF: ${INVOICE_VCS_REF:-unknown}
+        BUILD_DATE: ${INVOICE_BUILD_DATE:-unknown}
     command:
       - watch
       - --profile
@@ -73,6 +81,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: ${INVOICE_VERSION:-development}
+        VCS_REF: ${INVOICE_VCS_REF:-unknown}
+        BUILD_DATE: ${INVOICE_BUILD_DATE:-unknown}
     command:
       - serve
       - --profile
@@ -116,6 +128,10 @@ services:
     build:
       context: .
       dockerfile: docker/Dockerfile
+      args:
+        APP_VERSION: ${INVOICE_VERSION:-development}
+        VCS_REF: ${INVOICE_VCS_REF:-unknown}
+        BUILD_DATE: ${INVOICE_BUILD_DATE:-unknown}
     command:
       - ui
       - --profile

@@ -17,6 +17,15 @@ RUN ./mvnw clean verify
 
 FROM eclipse-temurin:21-jre
 
+ARG APP_VERSION=development
+ARG VCS_REF=unknown
+ARG BUILD_DATE=unknown
+
+LABEL org.opencontainers.image.title="invoice-system" \
+      org.opencontainers.image.version="$APP_VERSION" \
+      org.opencontainers.image.revision="$VCS_REF" \
+      org.opencontainers.image.created="$BUILD_DATE"
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ghostscript \
@@ -29,7 +38,8 @@ RUN apt-get update \
 
 RUN groupadd --gid 10001 invoice \
     && useradd --uid 10001 --gid 10001 --home-dir /app --shell /usr/sbin/nologin invoice \
-    && mkdir -p /app /config /data/input /data/ocr /data/archive /data/database /data/logs \
+    && mkdir -p /app /config /data/input /data/ocr /data/work /data/manual-review /data/error \
+        /data/archive /data/database /data/logs \
     && chown -R invoice:invoice /app /config /data
 
 COPY --from=build /workspace/invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar /app/invoice-worker.jar

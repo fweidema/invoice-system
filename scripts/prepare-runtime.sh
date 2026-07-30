@@ -6,6 +6,9 @@ gid=10001
 runtime_dirs=(
   "runtime/input"
   "runtime/ocr"
+  "runtime/work"
+  "runtime/manual-review"
+  "runtime/error"
   "runtime/archive"
   "runtime/database"
   "runtime/logs"
