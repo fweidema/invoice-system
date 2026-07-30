@@ -236,7 +236,28 @@ docker compose --profile ui up -d invoice-worker-ui
 
 Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil veroeffentlicht standardmaessig Port `8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil nutzt entsprechend Port `8081` und `INVOICE_UI_PORT`. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
 
-Details stehen in [docs/vps-deployment.md](docs/vps-deployment.md), Backup-Hinweise in [docs/backup-and-restore.md](docs/backup-and-restore.md). Fuer Sprint-027-Protokolle ohne Secrets und ohne private Daten steht [docs/test-reports/openai-e2e-template.md](docs/test-reports/openai-e2e-template.md) bereit.
+## Staging-Deployment
+
+Ein freigegebener, sauberer Staging-Checkout wird inklusive Backup, Git-Update,
+Build, Tests, Docker-Update und Healthcheck mit einem Befehl aktualisiert:
+
+```bash
+./deploy/deploy-staging.sh
+```
+
+Ein Backup oder eine Betriebspruefung kann separat ausgefuehrt werden:
+
+```bash
+./deploy/backup-staging.sh
+./deploy/check-staging.sh
+```
+
+Details und Voraussetzungen stehen in
+[docs/vps-deployment.md](docs/vps-deployment.md), Restore und Backup-Layout in
+[docs/backup-and-restore.md](docs/backup-and-restore.md). Fuer
+Sprint-027-Protokolle ohne Secrets und ohne private Daten steht
+[docs/test-reports/openai-e2e-template.md](docs/test-reports/openai-e2e-template.md)
+bereit.
 
 ## Datenschutz
 

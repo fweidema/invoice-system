@@ -1,208 +1,141 @@
-# VPS-Deployment
+# Staging-Deployment auf dem VPS
 
-Diese Anleitung beschreibt den Betrieb von `invoice-system` als Docker-Container auf einem Debian-13-VPS, zum Beispiel bei Contabo. Der Worker verarbeitet einen Batch und beendet sich danach. Es werden keine Ports veroeffentlicht und kein REST-Endpunkt gestartet.
+Diese Anleitung beschreibt den reproduzierbaren Staging-Betrieb von
+`invoice-system` mit Docker Compose. Lokale Entwicklung erfolgt weiterhin mit
+den Skripten unter `scripts/dev-*.sh`; die Skripte unter `deploy/` sind nur fuer
+den freigegebenen Staging-Checkout bestimmt. Ein produktiver Rollout wird nicht
+automatisch ausgefuehrt.
 
 ## Voraussetzungen
 
-Auf dem VPS muessen Docker Engine und Docker Compose verfuegbar sein:
+Auf dem Linux-Host werden benoetigt:
 
-```bash
-docker version
-docker compose version
-```
+- Git und ein sauberer Checkout des freigegebenen Staging-Branches,
+- Java 21 und der Maven Wrapper aus dem Repository,
+- Docker Engine mit Docker Compose,
+- `bash`, `curl`, `sqlite3`, `tar` und `realpath`,
+- Schreibrechte auf `runtime/` und `backup/staging/`.
 
-Empfohlene Startgrenze fuer den VPS: 4 GB Memory-Limit fuer den Container und keine enge CPU-Grenze. Die Compose-Datei setzt `mem_limit: 4g`. Alternativ kann bei einem manuellen `docker run` ein Limit mit `--memory=4g` gesetzt werden.
+Die Container laufen als UID/GID `10001`. `./scripts/prepare-runtime.sh` legt
+die persistenten Verzeichnisse an und bereitet ihre Rechte vor. Die
+Konfiguration liegt in `docker/application.properties`; Secrets gehoeren nicht
+in diese Datei oder in Git. Ein OpenAI-Key wird nur ueber `OPENAI_API_KEY`
+bereitgestellt.
 
-## Installation
+## Erstinstallation
 
 ```bash
 sudo mkdir -p /opt/invoice-system
-sudo chown frank:frank /opt/invoice-system
+sudo chown <staging-user>:<staging-group> /opt/invoice-system
 git clone <repository-url> /opt/invoice-system
 cd /opt/invoice-system
-```
-
-Die VPS-IP wird weder im Image noch im Anwendungscode hinterlegt.
-
-## Runtime vorbereiten
-
-```bash
+git switch main
 ./scripts/prepare-runtime.sh
 ```
 
-Das Skript legt die persistenten Verzeichnisse unter `runtime/` an und setzt, sofern moeglich, die Berechtigungen fuer UID/GID `10001`.
+Der Standardbranch ist `main`. Fuer einen anderen freigegebenen Branch muss bei
+jedem Deployment `STAGING_BRANCH=<branch>` gesetzt sein. Das Skript verweigert
+einen anderen aktuellen Branch und lokale Aenderungen an versionierten Dateien.
 
-## Build
-
-```bash
-docker compose build
-```
-
-Der Docker-Build fuehrt den Maven-Build mit Tests aus und erzeugt die Fat-JAR fuer den Runtime-Container.
-
-## Self-Check
+## Deployment mit einem Befehl
 
 ```bash
-./scripts/container-self-check.sh
+./deploy/deploy-staging.sh
 ```
 
-Der Check prueft Java, JAR, OCRmyPDF, Tesseract inklusive Sprache `deu`, externe Konfiguration und Schreibrechte auf den gemounteten Datenverzeichnissen. Er verarbeitet keine Rechnung und ruft OpenAI nicht auf.
+Der Befehl fuehrt in dieser Reihenfolge aus:
 
-## Mock-Test
+1. Runtime-Verzeichnisse vorbereiten,
+2. ein verpflichtendes, konsistentes Backup erstellen,
+3. den Staging-Branch mit `git pull --ff-only` aktualisieren,
+4. `./mvnw clean verify` mit Java 21 ausfuehren,
+5. versionierte Docker-Images bauen,
+6. Watch-Service, API und UI aktualisieren,
+7. Docker, Container, API, UI und SQLite pruefen.
 
-Die Startkonfiguration unter `docker/application.properties` verwendet `ai.provider=mock`. Eine Fake-Rechnung kann fuer einen Test nach `runtime/input` kopiert werden:
+Bei einem Fehler endet das Skript ungleich `0`; ein fehlgeschlagener Healthcheck
+nennt das zuvor angelegte Backup. Wiederholte Ausfuehrung ist sicher: Daten unter
+`runtime/` werden weder geloescht noch neu initialisiert, und Compose aktualisiert
+die bestehenden Services.
+
+## Konfiguration
+
+Die wichtigsten optionalen Umgebungsvariablen sind:
+
+| Variable | Standard | Bedeutung |
+| --- | --- | --- |
+| `STAGING_BRANCH` | `main` | freigegebener Staging-Branch |
+| `STAGING_RUNTIME_DIR` | `runtime` | persistente Daten |
+| `STAGING_BACKUP_DIR` | `backup/staging` | Backup-Ziel |
+| `STAGING_CONFIG_FILE` | `docker/application.properties` | externe Konfiguration |
+| `STAGING_DATABASE_FILE` | `runtime/database/invoice-system.db` | SQLite-Datei |
+| `INVOICE_API_PORT` | `8080` | API-Port auf dem Host |
+| `INVOICE_UI_PORT` | `8081` | UI-Port auf dem Host |
+| `STAGING_API_URL` | `http://127.0.0.1:8080/api/health` | API-Pruefziel |
+| `STAGING_UI_URL` | `http://127.0.0.1:8081/health` | UI-Pruefziel |
+
+Abweichende relative Pfade werden gegen das Repository-Root aufgeloest.
+`STAGING_CHECK_ATTEMPTS` und `STAGING_CHECK_INTERVAL_SECONDS` steuern die
+Wartezeit des Healthchecks.
+
+## Betriebspruefung und Version
 
 ```bash
-cp invoice-worker/src/test/resources/documents/fake_scan_rechnung_01.pdf runtime/input/
-docker compose run --rm invoice-worker
+./deploy/check-staging.sh
+docker compose --profile watch --profile ui ps
+docker compose --profile watch --profile ui logs
 ```
 
-Nach erfolgreichem Lauf sollten Datenbank, OCR-Ausgabe und Archiv auf dem Host erhalten bleiben:
+Der Check validiert den Docker-Daemon und die Compose-Datei, den Zustand von
+Watch, API und UI, `GET /api/health`, `GET /health` sowie
+`PRAGMA quick_check` der SQLite-Datenbank. Anschliessend gibt er die Git-Revision
+und die OCI-Image-Labels `version` und `revision` je Service aus.
 
-```text
-runtime/database/invoice-system.db
-runtime/ocr/
-runtime/archive/
-```
+Der Check verarbeitet keine Rechnung. Auch
+`./scripts/container-self-check.sh` ist ein sicherer Diagnoseweg fuer Java,
+OCR-Werkzeuge, Konfiguration und Schreibrechte.
 
+## Typische Fehler
 
-## Watch-Betrieb
+- **Falscher Branch oder veraenderte versionierte Dateien:** Checkout
+  bereinigen beziehungsweise den korrekten `STAGING_BRANCH` setzen. Fremde
+  Aenderungen nicht verwerfen.
+- **`git pull --ff-only` scheitert:** Branch-Abweichung zuerst in Git klaeren;
+  niemals auf dem VPS mergen oder force-pushen.
+- **Backup scheitert:** Rechte und freien Speicher unter `backup/staging/`,
+  Konfiguration sowie `runtime/archive` und `runtime/manual-review` pruefen.
+- **SQLite-Pruefung scheitert:** Services nicht weiter betreiben; Backup und
+  Datenbank untersuchen. Datenbank nicht loeschen oder automatisch neu anlegen.
+- **Container bleibt ungesund:** `docker compose ... ps` und `logs` pruefen,
+  danach Ports, UID/GID-`10001`-Rechte und Konfiguration kontrollieren.
+- **API oder UI nicht erreichbar:** Host-Portbelegung, Firewall und die
+  konfigurierten Pruef-URLs vergleichen.
 
-Der manuelle Batch-Service bleibt erhalten. Fuer dauerhafte automatische Verarbeitung kann der separate Watch-Service gestartet werden:
+## Update und Rollback
+
+Ein normales Update erfolgt erneut mit:
 
 ```bash
-docker compose --profile watch up -d invoice-worker-watch
-docker compose logs -f invoice-worker-watch
+./deploy/deploy-staging.sh
 ```
 
-Neue PDFs werden aus `runtime/input` erkannt, auf Stabilitaet geprueft und sequenziell ueber denselben Workflow verarbeitet. Stoppen:
+Fuer ein Code-Rollback wird nach menschlicher Freigabe ein bekannter vorheriger
+Commit auf dem Staging-Branch bereitgestellt und anschliessend dasselbe
+Deployment ausgefuehrt. Keine Tags erzeugen, keinen Force-Push verwenden und
+nicht direkt auf `main` mergen.
 
-```bash
-docker compose stop invoice-worker-watch
-```
+Ein Daten-Rollback ist eine separate, bewusste Entscheidung. Falls es
+erforderlich ist, Datenbank und Konfiguration mit dem dokumentierten
+Restore-Skript wiederherstellen. Archiv und Manual-Review werden zwar gesichert,
+aber nicht automatisch ueberschrieben. Details stehen in
+[backup-and-restore.md](backup-and-restore.md).
 
-Es werden keine Ports veroeffentlicht, kein Docker-Socket gemountet und keine Secrets in Properties-Dateien gespeichert. Details stehen in [watch-service.md](watch-service.md).
+## Sicherheitsgrenzen
 
-## Healthchecks und Diagnose
-
-Die Compose-Datei definiert Healthchecks fuer alle Services:
-
-- `invoice-worker` und `invoice-worker-watch` fuehren `/app/container-self-check.sh` aus. Dieser prueft Werkzeuge, Konfiguration und Schreibrechte, verarbeitet aber keine Rechnungen.
-- `invoice-worker-api` prueft `GET /api/health` innerhalb des Containers.
-- `invoice-worker-ui` prueft `GET /health`; der Endpunkt liest keine Rechnungen
-  und startet keinen Export.
-
-## Optionale Export-UI
-
-Die Exportoberflaeche wird nur mit dem Compose-Profil `ui` gestartet:
-
-```bash
-docker compose --profile ui up -d invoice-worker-ui
-docker compose --profile ui ps
-docker compose --profile ui logs -f invoice-worker-ui
-```
-
-Standardmaessig wird Host-Port `8081` veroeffentlicht. Eine abweichende
-Host-Belegung erfolgt mit `INVOICE_UI_PORT`; der Container-Port bleibt `8081`.
-Der Datenbank-Mount ist absichtlich schreibbar: Auch ein lesender SQLite-Client
-benoetigt im WAL-Betrieb Zugriff auf `-wal`/`-shm` und darf deshalb nicht auf
-einen read-only Mount gezwungen werden. UID/GID `10001` benoetigt Schreibrechte
-auf `runtime/database/`.
-
-Watch und UI koennen parallel gegen dieselbe Datenbank laufen:
-
-```bash
-docker compose --profile watch --profile ui up -d \
-  invoice-worker-watch invoice-worker-ui
-```
-
-SQLite-Verbindungen aktivieren einheitlich WAL, Foreign Keys und einen
-Busy-Timeout von 5 Sekunden. Exporte halten keine schreibende Transaktion offen.
-
-Vor einem VPS-Update lokal ausfuehren:
-
-```bash
-./scripts/dev-doctor.sh
-./scripts/dev-build.sh
-```
-
-Auf dem VPS bleibt der Self-Check der erste risikoarme Schritt:
-
-```bash
-./scripts/prepare-runtime.sh
-docker compose build
-./scripts/container-self-check.sh
-docker compose ps
-```
-## Produktiver OpenAI-Betrieb
-
-Erst nach erfolgreichem Mock-Test `docker/application.properties` auf `ai.provider=openai` umstellen und den API-Key ausschliesslich als Environment-Variable setzen:
-
-```bash
-export OPENAI_API_KEY="..."
-docker compose run --rm invoice-worker
-```
-
-Keine echten privaten Rechnungen verwenden, bevor Datenschutz, Freigabe und Aufbewahrung geklaert sind.
-
-## Benutzer pruefen
-
-```bash
-docker compose run --rm invoice-worker id
-```
-
-Die Ausgabe muss UID/GID `10001` und nicht `root` zeigen.
-
-## Logs
-
-```bash
-docker compose logs
-```
-
-Logs laufen ueber stdout/stderr. API-Keys, vollstaendige OCR-Texte, vollstaendige OpenAI-Antworten und personenbezogene Rechnungsdaten duerfen nicht geloggt werden.
-
-## Update
-
-```bash
-git pull
-docker compose build
-docker compose run --rm invoice-worker
-```
-
-Runtime-Daten unter `runtime/` werden dabei nicht geloescht.
-
-
-## Sicherer Update-Prozess
-
-Der produktive VPS wird nicht automatisch durch Codex aktualisiert. Fuer einen spaeteren manuellen Rollout:
-
-1. Backup von `runtime/database/` und `runtime/archive/` erstellen.
-2. Feature-Branch nach Review in `main` mergen.
-3. Auf dem VPS `git fetch` und den freigegebenen Commit auschecken.
-4. `./scripts/prepare-runtime.sh` ausfuehren.
-5. `docker compose build` ausfuehren.
-6. `./scripts/container-self-check.sh` ausfuehren.
-7. Zuerst mit `ai.provider=mock` testen.
-8. Erst danach produktiven OpenAI-Betrieb mit gesetztem `OPENAI_API_KEY` starten.
-
-`./scripts/dev-reset-db.sh` ist nur fuer lokale Entwicklungsdaten vorgesehen und darf nicht gegen VPS- oder Backup-Pfade verwendet werden.
-## Rollback
-
-1. Vorherigen Git-Tag oder Commit auschecken.
-2. Image neu bauen.
-3. Datenbank und Archiv nicht loeschen.
-4. Self-Check ausfuehren.
-5. Mock-Test ausfuehren.
-
-## Sicherheit
-
-- Container laeuft als Benutzer `invoice` mit UID/GID `10001`.
-- Ports werden nur fuer explizit aktivierte API-/UI-Profile veroeffentlicht.
-- Kein privileged mode.
-- Kein Docker-Socket-Mount.
-- Kein Host-Netzwerk.
-- Keine Secrets im Image oder in Properties-Dateien.
-- `docker/application.properties` wird read-only gemountet.
-- `no-new-privileges:true` ist gesetzt.
-- Linux-Capabilities werden per `cap_drop: [ALL]` entfernt.
-- Batch und Watch stellen weder REST-Endpunkt noch Web UI bereit.
+- Kein automatischer produktiver VPS-Rollout.
+- Kein privileged mode, Docker-Socket- oder Host-Netzwerk-Mount.
+- Container laufen ohne Root-Rechte mit `no-new-privileges` und ohne
+  Linux-Capabilities.
+- Runtime und Backups werden nicht automatisch geloescht.
+- Healthchecks verarbeiten keine Dokumente und starten keine AI-Aufrufe.
+- Keine Secrets, OCR-Volltexte oder privaten Rechnungsdaten in Git oder Logs.

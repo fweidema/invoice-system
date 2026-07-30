@@ -1,61 +1,95 @@
-# Backup und Restore
+# Staging-Backup und Restore
 
-Diese Notizen beschreiben manuelle Backups fuer den Docker/VPS-Betrieb. Es wird keine automatische Backup-Loesung implementiert.
+Die Staging-Skripte erstellen reproduzierbare, zeitgestempelte Backups. Vor
+jedem `./deploy/deploy-staging.sh` wird automatisch ein Backup erzeugt. Ein
+Backup kann auch separat gestartet werden:
 
-## Zu sichernde Daten
+```bash
+./deploy/backup-staging.sh
+```
 
-Pflicht:
+Der letzte Ausgabewert ist der angelegte absolute Backup-Pfad. Fehler liefern
+einen Exitcode ungleich `0`; unvollstaendige Backup-Verzeichnisse werden
+entfernt.
+
+## Inhalt und Konsistenz
+
+Unter `backup/staging/<UTC-Zeitstempel>/` entstehen:
 
 ```text
-runtime/database
-runtime/archive
-docker/application.properties
+database/invoice-system.db
+config/application.properties
+archive.tar.gz
+manual-review.tar.gz
+manifest.properties
 ```
 
-Optional:
+Die laufende SQLite-Datenbank wird mit der SQLite-Backup-API konsistent kopiert
+und die Kopie mit `PRAGMA quick_check` geprueft. Existiert beim ersten
+Deployment noch keine Datenbank, wird dies als `database/NOT_PRESENT`
+dokumentiert. Konfiguration, Archiv und Manual-Review-Verzeichnis werden
+ebenfalls gesichert. Das Manifest enthaelt Zeitpunkt, Git-Revision und
+Quellpfade.
 
-```text
-runtime/logs
-runtime/ocr
-```
+Das Backup enthaelt keine Umgebungsvariablen. Insbesondere wird
+`OPENAI_API_KEY` nicht gesichert. Auch in
+`docker/application.properties` duerfen keine Secrets stehen.
 
-## SQLite-Backup bei laufendem System
+## Datenbank und Konfiguration wiederherstellen
 
-Wenn `sqlite3` auf dem Host installiert ist, kann eine konsistente Kopie ueber `.backup` erstellt werden:
+Restore ist absichtlich explizit und akzeptiert nur ein Verzeichnis unterhalb
+des konfigurierten Backup-Roots:
 
 ```bash
-mkdir -p backup
-sqlite3 runtime/database/invoice-system.db ".backup 'backup/invoice-system.db'"
+./deploy/restore-staging.sh --yes \
+  backup/staging/20260730T120000Z
 ```
 
-Alternativ den Container stoppen beziehungsweise keinen Worker laufen lassen und die Datenbankdatei konsistent kopieren:
+Das Skript:
+
+1. validiert Backup, Manifest, Datenbank und Konfiguration,
+2. stoppt Watch-Service, API und UI,
+3. kopiert und prueft die Datenbank zunaechst temporaer,
+4. entfernt nur die zugehoerigen SQLite-WAL-/SHM-Dateien,
+5. ersetzt Datenbank und Konfiguration atomar.
+
+Die Services bleiben danach gestoppt. Vor einem Neustart Backup-Zeitpunkt und
+Konfiguration fachlich pruefen und dann ausfuehren:
 
 ```bash
-mkdir -p backup
-cp runtime/database/invoice-system.db backup/invoice-system.db
+./deploy/deploy-staging.sh
 ```
 
-## Archiv-Backup
+Ein Erstinstallations-Backup mit `database/NOT_PRESENT` kann nicht als
+Datenbank-Restore verwendet werden; das Skript lehnt es ab.
+
+## Archiv und Manual Review
+
+`archive.tar.gz` und `manual-review.tar.gz` sind Sicherungsartefakte, werden
+aber bewusst nicht automatisch zurueckgespielt. Ein unbedachtes Ueberschreiben
+koennte neuere Dokumente verlieren. Falls ein fachlich freigegebener
+vollstaendiger Daten-Rollback erforderlich ist:
+
+1. Services gestoppt lassen,
+2. aktuelle Verzeichnisse separat sichern,
+3. Inhalt und Ziel der TAR-Dateien pruefen,
+4. Archiv und Manual Review kontrolliert gemeinsam mit der passenden Datenbank
+   wiederherstellen,
+5. UID/GID-`10001`-Rechte und anschliessend den Staging-Check pruefen.
+
+Datenbank, Archiv und Manual Review muessen fachlich zusammenpassen. Ein
+Teil-Restore kann Dublettenpruefung und Nachvollziehbarkeit beeintraechtigen.
+
+## Abweichende Pfade und Aufbewahrung
+
+Pfade koennen beispielsweise fuer einen separaten Datentraeger gesetzt werden:
 
 ```bash
-tar -czf archive-backup.tar.gz runtime/archive
+STAGING_BACKUP_DIR=/srv/invoice-backups/staging \
+  ./deploy/backup-staging.sh
 ```
 
-## Konfigurations-Backup
-
-```bash
-cp docker/application.properties backup/application.properties
-```
-
-Keine Secrets in die Properties-Datei schreiben. Der OpenAI-Key wird nur ueber `OPENAI_API_KEY` bereitgestellt.
-
-## Wiederherstellung
-
-1. Container stoppen beziehungsweise keinen Worker starten.
-2. Datenbank nach `runtime/database/invoice-system.db` zurueckspielen.
-3. Archiv nach `runtime/archive` zurueckspielen.
-4. Berechtigungen pruefen und bei Bedarf `./scripts/prepare-runtime.sh` ausfuehren.
-5. Self-Check ausfuehren: `./scripts/container-self-check.sh`.
-6. Mock-Test mit `docker compose run --rm invoice-worker` durchfuehren.
-
-Datenbank und Archiv muessen zusammenpassen. Ein Archiv ohne passende Datenbank oder umgekehrt kann Dublettenpruefung und Nachvollziehbarkeit beeintraechtigen.
+Beim Restore muss derselbe `STAGING_BACKUP_DIR` gesetzt sein. Backups werden
+nicht automatisch geloescht oder rotiert. Aufbewahrung, externe Kopie,
+Verschluesselung und Loeschung muessen betrieblich festgelegt werden; niemals
+ein Reset-Skript gegen Staging- oder Backup-Pfade verwenden.
