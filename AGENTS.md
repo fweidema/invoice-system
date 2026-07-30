@@ -171,3 +171,12 @@ Bei Code Reviews besonders pruefen:
 - Logging: SLF4J.
 - JSON: Jackson.
 - Keine zusaetzlichen Bibliotheken einfuehren, wenn die Anforderung mit dem JDK sinnvoll umgesetzt werden kann.
+
+# Repository-Konventionen
+
+## Dokumentation
+
+- Allgemeine Projektregeln stehen in `AGENTS.md`.
+- Die aktuelle Sprintplanung befindet sich unter `docs/codex-tasks/`.
+- Vor Beginn einer Implementierung ist das aktuelle Sprint-Dokument zu lesen.
+- Bei Widersprüchen gelten die Anweisungen des Sprint-Dokuments für den jeweiligen Sprint.
