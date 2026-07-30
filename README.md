@@ -219,17 +219,20 @@ Fuer die lokale Entwicklung koennen die Dev-Skripte genutzt werden:
 ./scripts/dev-stop.sh
 ```
 
-Die Compose-Konfiguration enthaelt Healthchecks fuer Batch-, Watch- und API-Container. Der API-Healthcheck nutzt `GET /api/health`; Batch und Watch nutzen den Container-Self-Check ohne Dokumentverarbeitung.
+Die Compose-Konfiguration enthaelt Healthchecks fuer Batch-, Watch- und
+API-Container. Der API-Healthcheck nutzt `GET /api/health`; Batch und Watch
+nutzen den rein containerinternen `/app/container-self-check.sh` ohne
+Docker-Zugriff oder Dokumentverarbeitung.
 
 Der Worker kann als einzelner Docker-Container mit persistenter Runtime-Struktur betrieben werden. Der produktionsnahe Mock-Test nutzt weiterhin `ai.provider=mock` und benoetigt keinen OpenAI-Key.
 
 ```bash
 ./scripts/prepare-runtime.sh
 docker compose build
-./scripts/container-self-check.sh
 docker compose run --rm invoice-worker
 # dauerhaft, optionale Compose-Profile
 docker compose --profile watch up -d invoice-worker-watch
+./scripts/host-self-check.sh
 docker compose --profile api up -d invoice-worker-api
 docker compose --profile ui up -d invoice-worker-ui
 ```

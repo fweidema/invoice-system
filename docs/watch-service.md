@@ -125,10 +125,17 @@ Dauerhafter Watch-Service:
 
 ```bash
 docker compose --profile watch up -d invoice-worker-watch
+./scripts/host-self-check.sh
 docker compose logs -f invoice-worker-watch
 ```
 
 Der Service laeuft ohne Ports, ohne privileged mode, ohne Docker-Socket und als Nicht-Root-Benutzer `invoice`.
+
+Der Docker-Healthcheck `/app/container-self-check.sh` laeuft ausschliesslich im
+Container. Er prueft, ob PID 1 der Java-Worker mit der erwarteten Konfiguration
+ist und ob OCR-Werkzeuge sowie Runtime-Verzeichnisse verfuegbar sind. Docker-
+und Compose-Pruefungen gehoeren ausschliesslich in den manuellen Host-Aufruf
+`./scripts/host-self-check.sh`.
 
 ## VPS-Test
 

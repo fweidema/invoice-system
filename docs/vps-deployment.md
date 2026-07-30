@@ -132,8 +132,12 @@ Watch, API und UI, `GET /api/health`, `GET /health` sowie
 und die OCI-Image-Labels `version` und `revision` je Service aus.
 
 Der Check verarbeitet keine Rechnung. Auch
-`./scripts/container-self-check.sh` ist ein sicherer Diagnoseweg fuer Java,
-OCR-Werkzeuge, Konfiguration und Schreibrechte.
+`./scripts/host-self-check.sh` ist ein sicherer Diagnoseweg fuer den laufenden
+Watch-Container. Der Host-Check verwendet Docker Compose nur auf dem Host und
+ruft dort `/app/container-self-check.sh` auf. Der Container-Check selbst
+kommuniziert weder mit Docker noch mit dem Docker-Socket; er prueft den
+Java-Hauptprozess, dessen Konfigurationsargument, OCR-Werkzeuge und alle
+Runtime-Verzeichnisse.
 
 ## Typische Fehler
 

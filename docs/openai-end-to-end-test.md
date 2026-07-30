@@ -17,7 +17,6 @@ Vor dem Lauf:
 docker version
 docker compose version
 docker compose config
-./scripts/container-self-check.sh
 ```
 
 ## Fake-Dokument

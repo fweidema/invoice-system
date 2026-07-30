@@ -1,76 +1,74 @@
 #!/usr/bin/env bash
-set -euo pipefail
 
-if [ "${INVOICE_CONTAINER_SELF_CHECK:-}" != "1" ]; then
-  if ! command -v docker >/dev/null 2>&1; then
-    echo "Docker is required to run the container self-check from the host." >&2
-    exit 1
-  fi
-  docker compose run --rm --entrypoint /app/container-self-check.sh \
-    -e INVOICE_CONTAINER_SELF_CHECK=1 \
-    invoice-worker
-  exit $?
-fi
+set -Eeuo pipefail
 
-required_dirs=(
-  "/data/input"
-  "/data/ocr"
-  "/data/archive"
-  "/data/database"
-  "/data/logs"
+readonly APPLICATION_JAR="${INVOICE_SELF_CHECK_APPLICATION_JAR:-/app/invoice-worker.jar}"
+readonly CONFIGURATION_FILE="${INVOICE_SELF_CHECK_CONFIGURATION_FILE:-/config/application.properties}"
+readonly DATA_DIRECTORY="${INVOICE_SELF_CHECK_DATA_DIRECTORY:-/data}"
+readonly PROCESS_COMMAND_LINE_FILE="${INVOICE_SELF_CHECK_PROCESS_COMMAND_LINE_FILE:-/proc/1/cmdline}"
+readonly REQUIRED_RUNTIME_DIRECTORIES=(
+  input
+  ocr
+  work
+  manual-review
+  error
+  archive
+  database
+  logs
 )
+
+fail() {
+  printf '[ERROR] %s\n' "$*" >&2
+  exit 1
+}
 
 check_command() {
   local command_name="$1"
-  if ! command -v "$command_name" >/dev/null 2>&1; then
-    echo "Missing command: $command_name" >&2
-    exit 1
-  fi
-  echo "OK: $command_name available"
+  command -v "$command_name" >/dev/null 2>&1 \
+    || fail "Required container command is unavailable: $command_name"
 }
 
-check_writable_dir() {
-  local dir="$1"
-  if [ ! -d "$dir" ]; then
-    echo "Missing directory: $dir" >&2
-    exit 1
-  fi
-  if [ ! -w "$dir" ]; then
-    echo "Directory is not writable: $dir" >&2
-    exit 1
-  fi
-  echo "OK: $dir exists and is writable"
+check_runtime_directory() {
+  local directory="$1"
+  [ -d "$directory" ] || fail "Required runtime directory is missing: $directory"
+  [ -r "$directory" ] || fail "Required runtime directory is not readable: $directory"
+  [ -w "$directory" ] || fail "Required runtime directory is not writable: $directory"
 }
 
 check_command java
+check_command grep
 check_command ocrmypdf
 check_command tesseract
+check_command tr
 
-if [ ! -f /app/invoice-worker.jar ]; then
-  echo "Missing JAR: /app/invoice-worker.jar" >&2
-  exit 1
-fi
-echo "OK: /app/invoice-worker.jar exists"
+[ -r "$APPLICATION_JAR" ] || fail "Application JAR is missing or unreadable: $APPLICATION_JAR"
+[ -r "$CONFIGURATION_FILE" ] \
+  || fail "Application configuration is missing or unreadable: $CONFIGURATION_FILE"
+[ -r "$PROCESS_COMMAND_LINE_FILE" ] \
+  || fail "Cannot inspect the main container process: $PROCESS_COMMAND_LINE_FILE"
 
-if [ ! -f /config/application.properties ]; then
-  echo "Missing configuration: /config/application.properties" >&2
-  exit 1
-fi
-echo "OK: /config/application.properties exists"
+process_command_line="$(tr '\000' ' ' <"$PROCESS_COMMAND_LINE_FILE")"
+case "$process_command_line" in
+  *"java -jar $APPLICATION_JAR"*)
+    ;;
+  *)
+    fail "The main container process is not the invoice-worker Java process."
+    ;;
+esac
+case "$process_command_line" in
+  *"--config $CONFIGURATION_FILE"*)
+    ;;
+  *)
+    fail "The invoice-worker process was not started with the expected configuration: $CONFIGURATION_FILE"
+    ;;
+esac
 
 if ! tesseract --list-langs 2>/dev/null | grep -qx "deu"; then
-  echo "Missing Tesseract language: deu" >&2
-  exit 1
+  fail "Required Tesseract language is unavailable: deu"
 fi
-echo "OK: Tesseract language deu installed"
 
-for dir in "${required_dirs[@]}"; do
-  check_writable_dir "$dir"
+for relative_directory in "${REQUIRED_RUNTIME_DIRECTORIES[@]}"; do
+  check_runtime_directory "$DATA_DIRECTORY/$relative_directory"
 done
 
-probe_file="/data/database/.self-check-write-test"
-touch "$probe_file"
-rm -f "$probe_file"
-echo "OK: database directory accepts file creation"
-
-echo "Container self-check passed"
+printf '[INFO] Container self-check passed for process: %s\n' "$process_command_line"
