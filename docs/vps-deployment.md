@@ -16,11 +16,13 @@ Auf dem Linux-Host werden benoetigt:
 - `bash`, `curl`, `sqlite3`, `tar` und `realpath`,
 - Schreibrechte auf `runtime/` und `backup/staging/`.
 
-Die Container laufen als UID/GID `10001`. `./scripts/prepare-runtime.sh` legt
-die persistenten Verzeichnisse an und bereitet ihre Rechte vor. Die
-Konfiguration liegt in `docker/application.properties`; Secrets gehoeren nicht
-in diese Datei oder in Git. Ein OpenAI-Key wird nur ueber `OPENAI_API_KEY`
-bereitgestellt.
+Die Container laufen als UID/GID `10001:10001`. Auf dem Host ist fuer GID
+`10001` die Gruppe `invoice-runtime` vorgesehen. Der VPS-Benutzer muss Mitglied
+dieser Gruppe sein. `./scripts/prepare-runtime.sh` legt nur fehlende persistente
+Verzeichnisse an und prueft ihre Beschreibbarkeit. Es veraendert weder
+Eigentuemer noch Modi bestehender Dateien. Die Konfiguration liegt in
+`docker/application.properties`; Secrets gehoeren nicht in diese Datei oder in
+Git. Ein OpenAI-Key wird nur ueber `OPENAI_API_KEY` bereitgestellt.
 
 ## Erstinstallation
 
@@ -56,7 +58,45 @@ Der Befehl fuehrt in dieser Reihenfolge aus:
 Bei einem Fehler endet das Skript ungleich `0`; ein fehlgeschlagener Healthcheck
 nennt das zuvor angelegte Backup. Wiederholte Ausfuehrung ist sicher: Daten unter
 `runtime/` werden weder geloescht noch neu initialisiert, und Compose aktualisiert
-die bestehenden Services.
+die bestehenden Services. Das Deployment ruft niemals automatisch eine
+rekursive Rechte-Reparatur auf.
+
+## Runtime-Rechte
+
+Container erzeugen Dateien als UID/GID `10001:10001`. Ein Mitglied der
+Host-Gruppe `invoice-runtime` kann solche Dateien bei passenden Gruppenrechten
+lesen und schreiben, darf als Nicht-Eigentuemer aber kein `chmod` oder `chown`
+darauf ausfuehren. Deshalb enthaelt die normale Vorbereitung bewusst keine
+rekursiven Rechteaenderungen.
+
+Nur bei einer Erstinstallation oder nach einem Rechtefehler wird die
+administrative Reparatur manuell gestartet:
+
+```bash
+sudo ./deploy/fix-runtime-permissions.sh
+```
+
+Das Skript akzeptiert alternativ passwordless sudo. Es validiert das
+Runtime-Ziel, bleibt auf demselben Dateisystem und setzt:
+
+- Eigentum auf UID `10001` und GID `10001`,
+- Verzeichnisse auf `2775` inklusive Setgid-Bit,
+- regulaere Dateien auf `0664`.
+
+Die Gruppe wird standardmaessig als `invoice-runtime` aufgeloest. Werte koennen
+fuer eine abweichende, zuvor abgestimmte Host-Konfiguration ueberschrieben
+werden:
+
+```bash
+INVOICE_RUNTIME_UID=10001 \
+INVOICE_RUNTIME_GID=10001 \
+INVOICE_RUNTIME_GROUP=invoice-runtime \
+sudo -E ./deploy/fix-runtime-permissions.sh
+```
+
+Das Reparaturskript loescht oder verschiebt keine Daten. Es darf nur bei Bedarf
+und nach Kontrolle von `STAGING_RUNTIME_DIR` aufgerufen werden. Danach das
+normale Deployment erneut starten.
 
 ## Konfiguration
 
@@ -108,6 +148,11 @@ OCR-Werkzeuge, Konfiguration und Schreibrechte.
   Datenbank untersuchen. Datenbank nicht loeschen oder automatisch neu anlegen.
 - **Container bleibt ungesund:** `docker compose ... ps` und `logs` pruefen,
   danach Ports, UID/GID-`10001`-Rechte und Konfiguration kontrollieren.
+- **`Operation not permitted` oder Runtime-Verzeichnis nicht beschreibbar:**
+  Gruppenmitgliedschaft mit `id` und GID mit
+  `getent group invoice-runtime` pruefen. Falls die vorhandenen Rechte falsch
+  sind, einmalig `sudo ./deploy/fix-runtime-permissions.sh` ausfuehren. Das
+  Deployment selbst nicht mit rekursivem `chmod` oder `chown` erweitern.
 - **API oder UI nicht erreichbar:** Host-Portbelegung, Firewall und die
   konfigurierten Pruef-URLs vergleichen.
 

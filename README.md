@@ -252,6 +252,15 @@ Ein Backup oder eine Betriebspruefung kann separat ausgefuehrt werden:
 ./deploy/check-staging.sh
 ```
 
+Die normale Runtime-Vorbereitung aendert keine Rechte bestehender Dateien.
+Falls die UID/GID-`10001:10001`-Rechte nach einer Erstinstallation oder einem
+manuellen Eingriff repariert werden muessen, steht dafuer ausschliesslich der
+bewusst aufzurufende Admin-Befehl bereit:
+
+```bash
+sudo ./deploy/fix-runtime-permissions.sh
+```
+
 Details und Voraussetzungen stehen in
 [docs/vps-deployment.md](docs/vps-deployment.md), Restore und Backup-Layout in
 [docs/backup-and-restore.md](docs/backup-and-restore.md). Fuer

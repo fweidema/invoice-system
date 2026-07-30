@@ -30,6 +30,11 @@ cat >"$TEST_REPOSITORY/scripts/prepare-runtime.sh" <<EOF
 set -eu
 printf '%s\n' prepare-runtime >>"$TEST_DIRECTORY/actions"
 EOF
+cat >"$TEST_REPOSITORY/deploy/fix-runtime-permissions.sh" <<EOF
+#!/usr/bin/env bash
+set -eu
+printf '%s\n' fix-runtime-permissions >>"$TEST_DIRECTORY/actions"
+EOF
 cat >"$TEST_REPOSITORY/mvnw" <<EOF
 #!/usr/bin/env bash
 set -eu
@@ -100,7 +105,8 @@ esac
 EOF
 
 chmod +x "$TEST_REPOSITORY/deploy/backup-staging.sh" "$TEST_REPOSITORY/deploy/check-staging.sh" \
-    "$TEST_REPOSITORY/deploy/deploy-staging.sh" "$TEST_REPOSITORY/scripts/prepare-runtime.sh" \
+    "$TEST_REPOSITORY/deploy/deploy-staging.sh" "$TEST_REPOSITORY/deploy/fix-runtime-permissions.sh" \
+    "$TEST_REPOSITORY/scripts/prepare-runtime.sh" \
     "$TEST_REPOSITORY/mvnw" "$FAKE_BIN/git" "$FAKE_BIN/sqlite3" "$FAKE_BIN/curl" "$FAKE_BIN/docker"
 
 export PATH="$FAKE_BIN:$PATH"
@@ -111,6 +117,10 @@ export STAGING_CHECK_INTERVAL_SECONDS=0
 "$TEST_REPOSITORY/deploy/deploy-staging.sh"
 
 grep -qx 'prepare-runtime' "$TEST_DIRECTORY/actions"
+if grep -qx 'fix-runtime-permissions' "$TEST_DIRECTORY/actions"; then
+    printf 'Deployment unexpectedly invoked runtime permission repair.\n' >&2
+    exit 1
+fi
 grep -qx 'git pull --ff-only origin main' "$TEST_DIRECTORY/actions"
 grep -qx 'mvnw clean verify' "$TEST_DIRECTORY/actions"
 grep -qx 'docker compose --profile watch --profile ui build' "$TEST_DIRECTORY/actions"

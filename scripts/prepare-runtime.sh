@@ -1,36 +1,40 @@
 #!/usr/bin/env bash
-set -euo pipefail
+set -Eeuo pipefail
 
-uid=10001
-gid=10001
+SCRIPT_DIRECTORY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
+readonly SCRIPT_DIRECTORY
+REPOSITORY_ROOT="$(cd "$SCRIPT_DIRECTORY/.." && pwd -P)"
+readonly REPOSITORY_ROOT
+readonly RUNTIME_DIRECTORY="${STAGING_RUNTIME_DIR:-$REPOSITORY_ROOT/runtime}"
+
 runtime_dirs=(
-  "runtime/input"
-  "runtime/ocr"
-  "runtime/work"
-  "runtime/manual-review"
-  "runtime/error"
-  "runtime/archive"
-  "runtime/database"
-  "runtime/logs"
+  "input"
+  "ocr"
+  "work"
+  "manual-review"
+  "error"
+  "archive"
+  "database"
+  "logs"
 )
 
-echo "Preparing invoice-system runtime directories"
-for dir in "${runtime_dirs[@]}"; do
-  mkdir -p "$dir"
-  echo "Ensured $dir"
+fail() {
+  printf '[ERROR] %s\n' "$*" >&2
+  exit 1
+}
+
+printf '[INFO] Preparing invoice-system runtime directories below %s\n' "$RUNTIME_DIRECTORY"
+for relative_directory in "${runtime_dirs[@]}"; do
+  directory="$RUNTIME_DIRECTORY/$relative_directory"
+  mkdir -p -- "$directory" \
+    || fail "Cannot create required runtime directory: $directory"
+
+  probe_file="$(mktemp "$directory/.invoice-runtime-write-test.XXXXXX")" \
+    || fail "Required runtime directory is not writable: $directory. Run deploy/fix-runtime-permissions.sh as documented."
+  rm -f -- "$probe_file" \
+    || fail "Cannot remove runtime write test: $probe_file"
+
+  printf '[INFO] Ready and writable: %s\n' "$directory"
 done
 
-if command -v chown >/dev/null 2>&1; then
-  if [ "$(id -u)" -eq 0 ]; then
-    chown -R "$uid:$gid" runtime
-    echo "Set owner of runtime/ to $uid:$gid"
-  elif command -v sudo >/dev/null 2>&1 && sudo -n true 2>/dev/null; then
-    sudo chown -R "$uid:$gid" runtime
-    echo "Set owner of runtime/ to $uid:$gid via sudo"
-  else
-    echo "Skipping chown because root or passwordless sudo is unavailable"
-  fi
-fi
-
-chmod -R u+rwX,g+rwX runtime
-echo "Runtime preparation complete"
+printf '[INFO] Runtime preparation complete; existing files and permissions were not changed.\n'
