@@ -22,7 +22,7 @@ ai.model=gpt-5
 ai.temperature=0.0
 
 archive.directory=archive
-persistence.databaseFile=data/invoice-system.db
+persistence.databaseFile=runtime/database/invoice-system.db
 
 batch.inputDirectory=input
 batch.recursive=false
@@ -99,8 +99,12 @@ Leere Umgebungswerte werden ignoriert. Ungueltige Werte, zum Beispiel unbekannte
 ## Profile
 
 - `default`: interne Defaults, Mock-AI, echte OCR, echte PDF-Textextraktion.
-- `test`: Mock-AI, OCR wird uebersprungen, Mock-PDF-Text wird verwendet, lokale Testpfade, keine Netzwerkzugriffe.
-- `production`: keine automatische Mock-Umschaltung, echter Provider gemaess Konfiguration, echte OCR, echte PDF-Textextraktion.
+- `test`: Mock-AI, OCR wird uebersprungen, Mock-PDF-Text wird verwendet,
+  ausschliesslich Pfade unter `target/test-profile`, keine Netzwerkzugriffe.
+- `production`: keine automatische Mock-Umschaltung, echter Provider gemaess
+  Konfiguration, echte OCR, echte PDF-Textextraktion und containergeeignete
+  `/data`-Pfade. Die externe Docker-Konfiguration verwendet
+  `/data/database/invoice-system.db`.
 
 Explizite CLI-Optionen wie `--skip-ocr`, `--mock-text` und `--input` ueberschreiben Profil- oder Properties-Werte fuer den jeweiligen Lauf.
 
@@ -147,7 +151,7 @@ watch.shutdownTimeout=10s
 watch.processExistingFilesOnStartup=true
 
 archive.directory=/srv/invoice-system/archive
-persistence.databaseFile=/srv/invoice-system/data/invoice-system.db
+persistence.databaseFile=/srv/invoice-system/runtime/database/invoice-system.db
 
 ui.host=0.0.0.0
 ui.port=8081

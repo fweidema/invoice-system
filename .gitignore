@@ -56,8 +56,13 @@ Thumbs.db
 
 runtime/
 backup/
-*.db
-*.sqlite
+# Legacy and current local SQLite runtime locations; test fixtures belong under src/test/resources.
+/invoice-worker/data/*.db
+/invoice-worker/data/*.db-wal
+/invoice-worker/data/*.db-shm
+/invoice-worker/data/*.db-journal
+*.sqlite-wal
+*.sqlite-shm
 logs/
 /archive/
 /input/

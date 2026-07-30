@@ -11,6 +11,8 @@ trap cleanup EXIT
 
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 readonly SOURCE_ROOT
+REAL_GIT="$(command -v git)"
+readonly REAL_GIT
 readonly DATA_DIRECTORY="$TEST_DIRECTORY/data"
 readonly FAKE_BIN="$TEST_DIRECTORY/bin"
 readonly APPLICATION_JAR="$TEST_DIRECTORY/invoice-worker.jar"
@@ -71,6 +73,12 @@ fi
 readonly HOST_TEST_REPOSITORY="$TEST_DIRECTORY/repository"
 mkdir -p "$HOST_TEST_REPOSITORY/scripts"
 cp "$SOURCE_ROOT/scripts/host-self-check.sh" "$HOST_TEST_REPOSITORY/scripts/host-self-check.sh"
+"$REAL_GIT" -C "$HOST_TEST_REPOSITORY" init -q
+"$REAL_GIT" -C "$HOST_TEST_REPOSITORY" add .
+"$REAL_GIT" -C "$HOST_TEST_REPOSITORY" \
+  -c user.name='Self Check Test' \
+  -c user.email='self-check-test@example.invalid' \
+  commit -q -m 'test fixture'
 
 cat >"$FAKE_BIN/docker" <<EOF
 #!/usr/bin/env bash
@@ -90,5 +98,10 @@ chmod +x "$FAKE_BIN/docker" "$HOST_TEST_REPOSITORY/scripts/host-self-check.sh"
 PATH="$FAKE_BIN:$PATH" "$HOST_TEST_REPOSITORY/scripts/host-self-check.sh"
 grep -qx 'docker compose --profile watch exec -T invoice-worker-watch /app/container-self-check.sh' \
   "$TEST_DIRECTORY/docker-actions"
+[ -z "$("$REAL_GIT" -C "$HOST_TEST_REPOSITORY" status --porcelain)" ] || {
+  printf 'Host self-check changed the temporary Git checkout.\n' >&2
+  "$REAL_GIT" -C "$HOST_TEST_REPOSITORY" status --short >&2
+  exit 1
+}
 
 printf 'Container and host self-check tests passed.\n'

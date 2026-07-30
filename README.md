@@ -152,7 +152,7 @@ ai.provider=mock
 ai.model=gpt-5
 ai.temperature=0.0
 archive.directory=archive
-persistence.databaseFile=data/invoice-system.db
+persistence.databaseFile=runtime/database/invoice-system.db
 batch.inputDirectory=input
 batch.recursive=false
 ```

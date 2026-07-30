@@ -170,7 +170,7 @@ public class ConfigurationLoader {
     public Properties defaultProperties() {
         final Properties properties = new Properties();
         properties.setProperty(ARCHIVE_DIRECTORY, "archive");
-        properties.setProperty(PERSISTENCE_DATABASE_FILE, "data/invoice-system.db");
+        properties.setProperty(PERSISTENCE_DATABASE_FILE, "runtime/database/invoice-system.db");
         properties.setProperty(OCR_LANGUAGE, "deu");
         properties.setProperty(OCR_COMMAND, "ocrmypdf");
         properties.setProperty(OCR_OUTPUT_DIRECTORY, "ocr");

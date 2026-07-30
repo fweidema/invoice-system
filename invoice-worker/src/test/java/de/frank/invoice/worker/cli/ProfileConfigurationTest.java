@@ -22,6 +22,10 @@ class ProfileConfigurationTest {
         assertThat(profile.skipOcr()).isTrue();
         assertThat(profile.mockText()).isTrue();
         assertThat(profile.properties().getProperty("ai.provider")).isEqualTo("mock");
+        assertThat(profile.properties().getProperty("batch.inputDirectory"))
+                .isEqualTo("target/test-profile/input");
+        assertThat(profile.properties().getProperty("persistence.databaseFile"))
+                .isEqualTo("target/test-profile/invoice-system.db");
     }
 
     @Test
@@ -30,6 +34,8 @@ class ProfileConfigurationTest {
 
         assertThat(profile.skipOcr()).isFalse();
         assertThat(profile.mockText()).isFalse();
+        assertThat(profile.properties().getProperty("persistence.databaseFile"))
+                .isEqualTo("/data/database/invoice-system.db");
     }
 
     @Test

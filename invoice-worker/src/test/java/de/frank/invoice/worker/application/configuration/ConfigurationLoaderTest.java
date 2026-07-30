@@ -26,7 +26,8 @@ class ConfigurationLoaderTest {
 
         // Assert
         assertThat(configuration.archive().archiveDirectory()).isEqualTo(Path.of("archive"));
-        assertThat(configuration.persistence().databaseFile()).isEqualTo(Path.of("data", "invoice-system.db"));
+        assertThat(configuration.persistence().databaseFile())
+                .isEqualTo(Path.of("runtime", "database", "invoice-system.db"));
         assertThat(configuration.ocr().language()).isEqualTo("deu");
         assertThat(configuration.ocr().command()).isEqualTo("ocrmypdf");
         assertThat(configuration.ocr().outputDirectory()).isEqualTo(Path.of("ocr"));

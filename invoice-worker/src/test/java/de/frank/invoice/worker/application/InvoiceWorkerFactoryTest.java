@@ -5,7 +5,6 @@ import de.frank.invoice.worker.application.configuration.AiConfiguration;
 import de.frank.invoice.worker.application.configuration.ApplicationConfiguration;
 import de.frank.invoice.worker.application.configuration.ArchiveConfiguration;
 import de.frank.invoice.worker.application.configuration.BatchConfiguration;
-import de.frank.invoice.worker.application.configuration.ConfigurationLoader;
 import de.frank.invoice.worker.application.configuration.OcrConfiguration;
 import de.frank.invoice.worker.application.configuration.PersistenceConfiguration;
 import de.frank.invoice.worker.infrastructure.ai.mock.MockAiClient;
@@ -33,7 +32,7 @@ class InvoiceWorkerFactoryTest {
         final InvoiceWorkerFactory factory = new InvoiceWorkerFactory();
 
         // Act
-        final InvoiceWorker invoiceWorker = factory.create(new ConfigurationLoader().load());
+        final InvoiceWorker invoiceWorker = factory.create(configuration("mock"));
 
         // Assert
         assertThat(invoiceWorker).isNotNull();

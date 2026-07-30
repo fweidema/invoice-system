@@ -11,6 +11,8 @@ trap cleanup EXIT
 
 SOURCE_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 readonly SOURCE_ROOT
+REAL_GIT="$(command -v git)"
+readonly REAL_GIT
 readonly TEST_REPOSITORY="$TEST_DIRECTORY/repository"
 readonly FAKE_BIN="$TEST_DIRECTORY/bin"
 
@@ -109,6 +111,14 @@ chmod +x "$TEST_REPOSITORY/deploy/backup-staging.sh" "$TEST_REPOSITORY/deploy/ch
     "$TEST_REPOSITORY/scripts/prepare-runtime.sh" \
     "$TEST_REPOSITORY/mvnw" "$FAKE_BIN/git" "$FAKE_BIN/sqlite3" "$FAKE_BIN/curl" "$FAKE_BIN/docker"
 
+printf 'runtime/\nbackup/\n' >"$TEST_REPOSITORY/.gitignore"
+"$REAL_GIT" -C "$TEST_REPOSITORY" init -q
+"$REAL_GIT" -C "$TEST_REPOSITORY" add .
+"$REAL_GIT" -C "$TEST_REPOSITORY" \
+    -c user.name='Deployment Test' \
+    -c user.email='deployment-test@example.invalid' \
+    commit -q -m 'test fixture'
+
 export PATH="$FAKE_BIN:$PATH"
 export STAGING_TIMESTAMP="20260730T120000Z"
 export STAGING_CHECK_ATTEMPTS=1
@@ -127,5 +137,10 @@ grep -qx 'docker compose --profile watch --profile ui build' "$TEST_DIRECTORY/ac
 grep -qx 'docker compose --profile watch --profile ui up -d --remove-orphans invoice-worker-watch invoice-worker-api invoice-worker-ui' \
     "$TEST_DIRECTORY/actions"
 test -f "$TEST_REPOSITORY/backup/staging/20260730T120000Z/database/invoice-system.db"
+[ -z "$("$REAL_GIT" -C "$TEST_REPOSITORY" status --porcelain)" ] || {
+    printf 'Deployment changed the temporary Git checkout.\n' >&2
+    "$REAL_GIT" -C "$TEST_REPOSITORY" status --short >&2
+    exit 1
+}
 
 printf 'Deployment and staging check tests passed.\n'

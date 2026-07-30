@@ -61,6 +61,19 @@ nennt das zuvor angelegte Backup. Wiederholte Ausfuehrung ist sicher: Daten unte
 die bestehenden Services. Das Deployment ruft niemals automatisch eine
 rekursive Rechte-Reparatur auf.
 
+Der Repository-Checkout muss auch nach laufendem Watch-, API- und UI-Betrieb
+sauber bleiben. Alle Container verwenden ausschliesslich
+`/data/database/invoice-system.db`; auf dem Host liegt diese Datei unter
+`runtime/database/invoice-system.db`. `invoice-worker/data/` ist kein
+Laufzeitpfad. Vor und nach einem Rollout pruefen:
+
+```bash
+git status --short
+```
+
+Eine Ausgabe bedeutet, dass der Checkout vor `git pull` untersucht und
+bereinigt werden muss. Laufzeitdaten niemals committen.
+
 ## Runtime-Rechte
 
 Container erzeugen Dateien als UID/GID `10001:10001`. Ein Mitglied der
@@ -146,6 +159,14 @@ Runtime-Verzeichnisse.
   Aenderungen nicht verwerfen.
 - **`git pull --ff-only` scheitert:** Branch-Abweichung zuerst in Git klaeren;
   niemals auf dem VPS mergen oder force-pushen.
+- **Legacy-Datei `invoice-worker/data/invoice-system.db` ist veraendert:**
+  Services stoppen und zuerst eine konsistente Sicherung der Datei anlegen.
+  Falls sie produktive Daten enthaelt und
+  `runtime/database/invoice-system.db` noch nicht existiert, die Sicherung
+  kontrolliert dorthin uebernehmen. Anschliessend die versionierte Legacy-Datei
+  mit `git restore -- invoice-worker/data/invoice-system.db` auf den
+  Repository-Stand zuruecksetzen und das Deployment erneut starten. Nicht
+  unbesehen eine vorhandene Runtime-Datenbank ueberschreiben.
 - **Backup scheitert:** Rechte und freien Speicher unter `backup/staging/`,
   Konfiguration sowie `runtime/archive` und `runtime/manual-review` pruefen.
 - **SQLite-Pruefung scheitert:** Services nicht weiter betreiben; Backup und

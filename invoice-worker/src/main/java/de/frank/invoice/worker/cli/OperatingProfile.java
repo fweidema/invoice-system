@@ -59,10 +59,25 @@ public enum OperatingProfile {
         final Properties properties = new Properties();
         if (this == TEST) {
             properties.setProperty(ConfigurationLoader.AI_PROVIDER, AiConfiguration.PROVIDER_MOCK);
-            properties.setProperty(ConfigurationLoader.BATCH_INPUT_DIRECTORY, "invoice-worker/src/test/resources/documents");
+            properties.setProperty(ConfigurationLoader.BATCH_INPUT_DIRECTORY, "target/test-profile/input");
+            properties.setProperty(ConfigurationLoader.WATCH_DIRECTORY, "target/test-profile/input");
             properties.setProperty(ConfigurationLoader.ARCHIVE_DIRECTORY, "target/test-profile/archive");
             properties.setProperty(ConfigurationLoader.PERSISTENCE_DATABASE_FILE, "target/test-profile/invoice-system.db");
             properties.setProperty(ConfigurationLoader.OCR_OUTPUT_DIRECTORY, "target/test-profile/ocr");
+            properties.setProperty(ConfigurationLoader.PROCESSING_WORK_DIRECTORY, "target/test-profile/work");
+            properties.setProperty(
+                    ConfigurationLoader.PROCESSING_MANUAL_REVIEW_DIRECTORY,
+                    "target/test-profile/manual-review");
+            properties.setProperty(ConfigurationLoader.PROCESSING_ERROR_DIRECTORY, "target/test-profile/error");
+        } else if (this == PRODUCTION) {
+            properties.setProperty(ConfigurationLoader.BATCH_INPUT_DIRECTORY, "/data/input");
+            properties.setProperty(ConfigurationLoader.WATCH_DIRECTORY, "/data/input");
+            properties.setProperty(ConfigurationLoader.ARCHIVE_DIRECTORY, "/data/archive");
+            properties.setProperty(ConfigurationLoader.PERSISTENCE_DATABASE_FILE, "/data/database/invoice-system.db");
+            properties.setProperty(ConfigurationLoader.OCR_OUTPUT_DIRECTORY, "/data/ocr");
+            properties.setProperty(ConfigurationLoader.PROCESSING_WORK_DIRECTORY, "/data/work");
+            properties.setProperty(ConfigurationLoader.PROCESSING_MANUAL_REVIEW_DIRECTORY, "/data/manual-review");
+            properties.setProperty(ConfigurationLoader.PROCESSING_ERROR_DIRECTORY, "/data/error");
         }
         return properties;
     }
