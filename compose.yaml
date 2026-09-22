@@ -100,7 +100,7 @@ services:
       MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH: ${MANUAL_REVIEW_MAX_OCR_TEXT_LENGTH:-100000}
       MANUAL_REVIEW_DOWNLOAD_ENABLED: ${MANUAL_REVIEW_DOWNLOAD_ENABLED:-true}
     ports:
-      - "${INVOICE_API_PORT:-8080}:8080"
+      - "127.0.0.1:${INVOICE_API_PORT:-8080}:8080"
     volumes:
       - ./runtime/input:/data/input
       - ./runtime/ocr:/data/ocr
@@ -147,7 +147,7 @@ services:
     environment:
       INVOICE_UI_MANUAL_REVIEW_API_BASE_URI: ${INVOICE_UI_MANUAL_REVIEW_API_BASE_URI:-http://invoice-worker-api:8080/}
     ports:
-      - "${INVOICE_UI_PORT:-8081}:8081"
+      - "127.0.0.1:${INVOICE_UI_PORT:-8081}:8081"
     volumes:
       - ./runtime/database:/data/database
       - ./runtime/logs:/data/logs
