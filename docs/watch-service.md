@@ -163,3 +163,9 @@ docker compose stop invoice-worker-watch
 - Datei wird uebersprungen: Dateigroesse 0, Symlink, versteckter Name oder nicht stabile Datei.
 - Produktionsstart scheitert: `--profile production` benoetigt `--config`.
 - OpenAI-Aufruf fehlt: `ai.provider=openai` und `OPENAI_API_KEY` muessen gesetzt sein; normale Tests bleiben beim Mock-Provider offline.
+
+## Uploads aus der UI
+
+Der UI-Upload veröffentlicht vollständige PDFs atomar im Watch-Eingang. `.uploads/*.part` liegt unterhalb des nicht rekursiv überwachten Eingangs und bleibt unsichtbar. Watch und UI müssen denselben Input-Mount verwenden. `./scripts/dev-start.sh full` bzw. `ui` startet Watch, API und UI gemeinsam. Bei gestopptem Watch bleiben Uploads im Eingang; die standardmäßig aktive Startverarbeitung holt sie nach.
+
+Einrichtung, manuelle Abnahme und Rollback: [Rechnungsupload](invoice-upload.md).

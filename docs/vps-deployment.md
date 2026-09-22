@@ -222,3 +222,9 @@ aber nicht automatisch ueberschrieben. Details stehen in
 - Runtime und Backups werden nicht automatisch geloescht.
 - Healthchecks verarbeiten keine Dokumente und starten keine AI-Aufrufe.
 - Keine Secrets, OCR-Volltexte oder privaten Rechnungsdaten in Git oder Logs.
+
+## Rechnungsupload betreiben
+
+UI, API und Watch werden vom vorhandenen Deployment gemeinsam gestartet. Die UI benötigt jetzt den schreibbaren `runtime/input:/data/input`-Mount. Nach menschlicher Freigabe das UI-Image und den Container aktualisieren; Pfade, Rechte und den bewusst gewählten AI-Provider prüfen. Die mitgelieferte Docker-Konfiguration verwendet Mock-AI. Lokal startet `./scripts/dev-start.sh full` alle drei Services und `./scripts/dev-stop.sh` stoppt auch die UI. Loopback und Tailscale Serve bleiben unverändert.
+
+Einrichtung, manuelle Abnahme und Rollback: [Rechnungsupload](invoice-upload.md).

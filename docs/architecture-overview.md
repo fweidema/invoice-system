@@ -133,3 +133,22 @@ Die Zugriffskontrolle erfolgt im Tailnet, ohne Bearer-Token-Authentifizierung
 in Java. Funnel ist kein Standardzugangsweg. Optionales öffentliches HTTPS
 erfordert einen Reverse Proxy auf Port 443 mit zusätzlicher Authentifizierung.
 [Betriebs- und Rollback-Anleitung](vps-access-security.md).
+
+## Rechnungsupload
+
+```text
+Browser -> InvoiceUploadView -> DocumentSubmissionService
+                                -> DocumentSubmissionStore (Port)
+                                -> FileSystemDocumentSubmissionStore
+                                -> input/.uploads/<uuid>.part
+                                -> ATOMIC_MOVE -> input/<uuid>.pdf
+                                -> WatchServiceRunner -> bestehender Workflow
+```
+
+Die UI erhält den Service über Servlet-Kontext und Vaadin-Session; keine globale
+Serviceinstanz. Der Application-Service prüft Dateinamen, PDF-Signatur, Streamgröße
+und die Anzahl je Vorgang. Der Dateisystemadapter verwaltet temporäre Dateien
+und atomare Veröffentlichung. Die UI kennt weder OCR noch KI oder Persistenz
+für Uploads. Die bestehende Pipeline übernimmt Dubletten, Validierung, Persistenz
+und Archivierung. Es entsteht keine öffentliche Upload-API.
+[Betriebsdetails und Sicherheitsgrenzen](invoice-upload.md).

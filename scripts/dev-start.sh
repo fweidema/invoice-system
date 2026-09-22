@@ -12,6 +12,10 @@ case "$profile" in
   api)
     compose_args=(--profile api up -d invoice-worker-api)
     ;;
+  ui|full)
+    service="invoice-worker-ui"
+    compose_args=(--profile watch --profile ui up -d invoice-worker-watch invoice-worker-api invoice-worker-ui)
+    ;;
   watch)
     service="invoice-worker-watch"
     compose_args=(--profile watch up -d invoice-worker-watch)
@@ -21,7 +25,7 @@ case "$profile" in
     compose_args=(up -d invoice-worker)
     ;;
   *)
-    echo "Usage: $0 [api|watch|batch]" >&2
+    echo "Usage: $0 [api|watch|batch|ui|full]" >&2
     exit 2
     ;;
 esac
@@ -35,17 +39,20 @@ fi
 docker compose "${compose_args[@]}"
 docker compose ps "$service"
 
-if [ "$profile" = "api" ]; then
+if [[ "$profile" = "api" || "$profile" = "ui" || "$profile" = "full" ]]; then
   port="${INVOICE_API_PORT:-8080}"
   health_url="http://127.0.0.1:${port}/api/health"
-  echo "Checking API health at $health_url"
+  if [[ "$profile" = "ui" || "$profile" = "full" ]]; then
+    health_url="http://127.0.0.1:${INVOICE_UI_PORT:-8081}/health"
+  fi
+  echo "Checking application health at $health_url"
   for attempt in 1 2 3 4 5; do
     if command -v curl >/dev/null 2>&1 && curl -fsS "$health_url" >/dev/null; then
-      echo "API healthcheck passed"
+      echo "Application healthcheck passed"
       exit 0
     fi
     sleep 2
   done
-  echo "API healthcheck did not pass. Inspect with: docker compose logs $service" >&2
+  echo "Application healthcheck did not pass. Inspect with: docker compose logs $service" >&2
   exit 1
 fi

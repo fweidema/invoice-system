@@ -11,4 +11,4 @@ if ! command -v docker >/dev/null 2>&1; then
 fi
 
 echo "Stopping local development containers. Persistent runtime data is kept."
-docker compose --profile api --profile watch stop invoice-worker invoice-worker-api invoice-worker-watch
+docker compose --profile api --profile watch --profile ui stop invoice-worker invoice-worker-api invoice-worker-watch invoice-worker-ui

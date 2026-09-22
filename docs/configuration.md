@@ -231,3 +231,34 @@ Tailscale Serve leitet ausschließlich zur Loopback-UI weiter. Keine öffentlich
 API, kein Funnel und keine Java-Bearer-Token-Authentifizierung. Details und
 optionales authentifiziertes HTTPS auf Port 443 stehen in
 [vps-access-security.md](vps-access-security.md).
+
+## Rechnungsupload (Sprint 042)
+
+| Property | Standard | Environment |
+| --- | --- | --- |
+| `upload.inputDirectory` | effektives `watch.directory`; Docker `/data/input` | `INVOICE_UPLOAD_INPUT_DIRECTORY` |
+| `upload.maximumBytes` | `20971520` (20 MiB) | `INVOICE_UPLOAD_MAXIMUM_BYTES` |
+| `upload.maximumFiles` | `10` | `INVOICE_UPLOAD_MAXIMUM_FILES` |
+
+Die vorgeschlagenen Namen werden unverändert verwendet. Der lokale Pfad folgt
+dem bestehenden Watch-Default `input` statt eines absoluten Docker-Pfads.
+Ohne expliziten Upload-Pfad folgt er auch einem überschriebenen Watch-Pfad.
+Die Produktionskonfiguration setzt `/data/input` ausdrücklich; unter Compose
+entspricht das `runtime/input` auf dem Host. Bei einer expliziten Pfadänderung
+Upload und Watch gemeinsam anpassen. Beide Limits sind positive Integer
+(maximal 2.147.483.647); größere oder ungültige Werte verhindern den Start.
+Für Limits und Pfad gilt die bestehende Properties-/Environment-Priorität.
+Eigene Upload-CLI-Optionen werden nicht eingeführt.
+
+Die Grenzen werden serverseitig geprüft und als Browser-Hinweise gesetzt.
+Ein Vorgang beginnt mit dem Öffnen der Ansicht bzw. „Neuer Vorgang“; abgelehnte
+serverseitige Versuche zählen mit. Beim Fehler werden bereits eingereihte
+andere Dateien nicht zurückgenommen.
+
+Docker liest die Upload-Properties aus der gemounteten Konfiguration. Für
+Environment-Overrides im UI-Container die Variablen ausdrücklich in einer
+lokalen Compose-Erweiterung setzen; die Host-Umgebung wird nicht automatisch
+in Container übernommen. API/UI bleiben ausschließlich auf Host-Loopback.
+Die Standard-Docker-Konfiguration verwendet `ai.provider=mock`; ein explizites
+`INVOICE_AI_PROVIDER` wird in Batch/Watch weitergereicht. Leere Werte lassen
+den Properties-Wert gelten. Details: [Rechnungsupload](invoice-upload.md).

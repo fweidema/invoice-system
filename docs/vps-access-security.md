@@ -182,3 +182,9 @@ Standard- und alternative Host-Ports sowie interne API-Kommunikation. Negative
 Fälle umfassen fehlende Host-Adressen, Wildcards, IPv6, Nicht-Loopback-Adressen,
 zusätzliche öffentliche Mappings und Host-Networking. Laufende VPS-Container und
 Tailnet-Berechtigungen werden ausschließlich durch die manuelle Abnahme geprüft.
+
+## Rechnungsupload (Sprint 042)
+
+Der private UI-Zugang bietet nun `/upload`. Die Vaadin-Session überträgt PDFs zur UI; die interne API erhält keine Upload-Route. Größen- und Dateizahlgrenzen gelten serverseitig. Keine zusätzlichen Ports, Tokens oder Authentifizierungswege. Beim optionalen Reverse Proxy auch Vaadin-Upload-Routen schützen und die Upload-Limits berücksichtigen.
+
+Einrichtung, manuelle Abnahme und Rollback: [Rechnungsupload](invoice-upload.md).

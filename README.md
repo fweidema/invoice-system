@@ -71,6 +71,7 @@ Alle Skripte werden aus dem Repository-Root gestartet und verwenden robuste rela
 ./scripts/dev-start.sh api          # API-Profil starten und /api/health pruefen
 ./scripts/dev-start.sh watch        # Watch-Service starten
 ./scripts/dev-start.sh batch        # Batch-Container starten
+./scripts/dev-start.sh full         # UI, API und Watch für Rechnungsuploads starten
 ./scripts/dev-stop.sh               # Entwicklungscontainer stoppen, Daten bleiben erhalten
 ./scripts/dev-reset-db.sh           # interaktiver lokaler DB-Reset
 ./scripts/dev-reset-db.sh --yes     # automatisierter lokaler DB-Reset
@@ -237,7 +238,7 @@ docker compose --profile api up -d invoice-worker-api
 docker compose --profile ui up -d invoice-worker-ui
 ```
 
-Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil bindet ausschließlich `127.0.0.1:8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil entsprechend `127.0.0.1:8081` und `INVOICE_UI_PORT`. Der VPS-Zugriff erfolgt über Tailscale Serve ausschließlich zur UI; die API bleibt intern. Einrichtung, Abnahme und Rollback: [VPS-Zugriffssicherheit](docs/vps-access-security.md). Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
+Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil bindet ausschließlich `127.0.0.1:8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil entsprechend `127.0.0.1:8081` und `INVOICE_UI_PORT`. Der VPS-Zugriff erfolgt über Tailscale Serve ausschließlich zur UI; die API bleibt intern. Einrichtung, Abnahme und Rollback: [VPS-Zugriffssicherheit](docs/vps-access-security.md). Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `INVOICE_AI_PROVIDER=openai` und `OPENAI_API_KEY` als Environment-Variablen exportieren.
 
 ## Staging-Deployment
 
@@ -274,3 +275,17 @@ bereit.
 ## Datenschutz
 
 Rechnungstexte koennen personenbezogene oder vertrauliche Daten enthalten. Echte OpenAI-Aufrufe duerfen nur erfolgen, wenn die Verarbeitung dieser Daten fachlich, rechtlich und betrieblich freigegeben ist. Tests verwenden Fake-Dokumente und Mock-AI.
+
+## Rechnungen hochladen
+
+Die Navigation „Rechnungen hochladen“ öffnet `/upload`: PDF-Dateien per
+Drag-and-drop oder Dateiauswahl einreichen (standardmäßig 10 Dateien, je 20 MiB).
+Der Upload streamt auf Disk und übergibt erst vollständige PDFs atomar an den
+Watch-Service. „Zur Verarbeitung eingereiht“ bestätigt ausschließlich die
+Übergabe; OCR und Mock-AI laufen anschließend im vorhandenen Workflow.
+
+`./scripts/dev-start.sh full` (auch `ui`) startet UI, API und Watch gemeinsam;
+zuvor bei Codeänderungen `docker compose --profile watch --profile ui build`
+ausführen. Die Standard-Docker-Konfiguration nutzt Mock-AI.
+`./scripts/dev-stop.sh` stoppt alle vier Services einschließlich UI.
+[Betrieb, Tests und Rollback](docs/invoice-upload.md).
