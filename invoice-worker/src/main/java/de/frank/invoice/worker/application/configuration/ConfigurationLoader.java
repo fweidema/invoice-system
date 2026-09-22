@@ -49,9 +49,15 @@ public class ConfigurationLoader {
     public static final String UI_SHUTDOWN_TIMEOUT = "ui.shutdownTimeout";
     public static final String UI_MAXIMUM_EXPORT_INVOICES = "ui.maximumExportInvoices";
     public static final String UI_MANUAL_REVIEW_API_BASE_URI = "ui.manualReviewApiBaseUri";
+    public static final String UPLOAD_INPUT_DIRECTORY = "upload.inputDirectory";
+    public static final String UPLOAD_MAXIMUM_BYTES = "upload.maximumBytes";
+    public static final String UPLOAD_MAXIMUM_FILES = "upload.maximumFiles";
     public static final String LOGGING_LEVEL = "logging.level";
 
     private static final Map<String, String> ENVIRONMENT_MAPPING = Map.ofEntries(
+            Map.entry("INVOICE_UPLOAD_INPUT_DIRECTORY", UPLOAD_INPUT_DIRECTORY),
+            Map.entry("INVOICE_UPLOAD_MAXIMUM_BYTES", UPLOAD_MAXIMUM_BYTES),
+            Map.entry("INVOICE_UPLOAD_MAXIMUM_FILES", UPLOAD_MAXIMUM_FILES),
             Map.entry("INVOICE_AI_PROVIDER", AI_PROVIDER),
             Map.entry("INVOICE_AI_MODEL", AI_MODEL),
             Map.entry("INVOICE_AI_TEMPERATURE", AI_TEMPERATURE),
@@ -208,6 +214,8 @@ public class ConfigurationLoader {
                 Integer.toString(UiConfiguration.DEFAULT_MAXIMUM_EXPORT_INVOICES));
         properties.setProperty(UI_MANUAL_REVIEW_API_BASE_URI,
                 UiConfiguration.DEFAULT_MANUAL_REVIEW_API_BASE_URI.toString());
+        properties.setProperty(UPLOAD_MAXIMUM_BYTES, Integer.toString(UploadConfiguration.DEFAULT_MAXIMUM_BYTES));
+        properties.setProperty(UPLOAD_MAXIMUM_FILES, Integer.toString(UploadConfiguration.DEFAULT_MAXIMUM_FILES));
         properties.setProperty(LOGGING_LEVEL, LoggingConfiguration.DEFAULT_LEVEL);
         return properties;
     }
@@ -224,7 +232,12 @@ public class ConfigurationLoader {
                 ui(properties),
                 logging(properties),
                 processing(properties),
-                manualReview(properties));
+                manualReview(properties),
+                new UploadConfiguration(
+                        path(properties, properties.containsKey(UPLOAD_INPUT_DIRECTORY)
+                                ? UPLOAD_INPUT_DIRECTORY : WATCH_DIRECTORY),
+                        positiveInteger(properties, UPLOAD_MAXIMUM_BYTES),
+                        positiveInteger(properties, UPLOAD_MAXIMUM_FILES)));
     }
 
     private void applyEnvironment(final Properties properties) {

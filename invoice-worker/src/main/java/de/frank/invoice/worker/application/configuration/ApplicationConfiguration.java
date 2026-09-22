@@ -17,6 +17,7 @@ import java.util.Objects;
  * @param ui browser export UI configuration
  * @param logging logging configuration
  * @param processing resilient processing configuration
+ * @param upload upload limits and destination
  * @param manualReview internal manual-review API configuration
  */
 public record ApplicationConfiguration(
@@ -30,7 +31,8 @@ public record ApplicationConfiguration(
         UiConfiguration ui,
         LoggingConfiguration logging,
         ProcessingConfiguration processing,
-        ManualReviewConfiguration manualReview) {
+        ManualReviewConfiguration manualReview,
+        UploadConfiguration upload) {
 
     /**
      * Creates application configuration with default logging configuration.
@@ -112,10 +114,22 @@ public record ApplicationConfiguration(
                 ManualReviewConfiguration.defaults());
     }
 
+    /** Compatibility constructor retaining the watcher destination for uploads. */
+    public ApplicationConfiguration(
+            final ArchiveConfiguration archive, final PersistenceConfiguration persistence,
+            final OcrConfiguration ocr, final AiConfiguration ai, final BatchConfiguration batch,
+            final WatchConfiguration watch, final ApiConfiguration api, final UiConfiguration ui,
+            final LoggingConfiguration logging, final ProcessingConfiguration processing,
+            final ManualReviewConfiguration manualReview) {
+        this(archive, persistence, ocr, ai, batch, watch, api, ui, logging, processing,
+                manualReview, UploadConfiguration.defaults(watch.directory()));
+    }
+
     /**
      * Creates an application configuration.
      */
     public ApplicationConfiguration {
+        Objects.requireNonNull(upload, "upload must not be null");
         Objects.requireNonNull(archive, "archive must not be null");
         Objects.requireNonNull(persistence, "persistence must not be null");
         Objects.requireNonNull(ocr, "ocr must not be null");
