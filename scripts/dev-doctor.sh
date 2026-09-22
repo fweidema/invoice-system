@@ -4,6 +4,7 @@ set -u
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repo_root="$(cd "$script_dir/.." && pwd)"
 cd "$repo_root" || exit 2
+source "$script_dir/lib/dev-healthcheck.sh"
 
 failures=0
 warnings=0
@@ -154,7 +155,7 @@ fi
 
 health_url="http://127.0.0.1:${api_port}/api/health"
 if command -v curl >/dev/null 2>&1; then
-  curl -fsS "$health_url" >/dev/null 2>&1 && ok "API healthcheck passed" || warn "API healthcheck unavailable at $health_url"
+  dev_curl_local_healthcheck "$health_url" >/dev/null 2>&1 && ok "API healthcheck passed" || warn "API healthcheck unavailable at $health_url"
 else
   warn "curl not found; API healthcheck skipped"
 fi
