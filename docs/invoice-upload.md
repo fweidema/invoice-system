@@ -4,7 +4,7 @@
 
 Nach `./scripts/dev-build.sh` und dem lokalen Image-Build
 `docker compose --profile watch --profile ui build` startet
-`./scripts/dev-start.sh full` UI, API und Watch-Service gemeinsam.
+`INVOICE_AI_PROVIDER=mock ./scripts/dev-start.sh full` UI, API und Watch-Service gemeinsam mit ausdrücklich aktiviertem Mock-Provider.
 `./scripts/dev-start.sh ui` ist ein Alias für diesen vollständigen Uploadbetrieb.
 `./scripts/dev-stop.sh` stoppt auch die UI, ohne Runtime-Daten zu löschen.
 
@@ -23,12 +23,17 @@ erzeugt ein neues Kontingent; zuerst laufende Transfers abschließen. Abgelehnte
 Dateien nach Korrektur in einem neuen Vorgang senden. Andere bereits eingereihte
 Dateien bleiben erhalten; das ist keine gemeinsame Transaktion für alle PDFs.
 
-Der Standard in `docker/application.properties` ist `ai.provider=mock`.
-OCR bleibt das vorhandene lokale OCR-Werkzeug. Für bewusst freigegebenen
-OpenAI-Betrieb `INVOICE_AI_PROVIDER=openai` und den Key ausschließlich in der
-Betriebsumgebung setzen. Eine leere Provider-Umgebungsvariable lässt die
-Properties-Konfiguration gelten. Die UI erhält keinen OpenAI-Key und ruft
-OpenAI nicht auf.
+Die versionierte Produktionskonfiguration `docker/application.properties`
+verwendet `ai.provider=openai`, wie vor Sprint 042. Reale Uploads werden daher
+nicht stillschweigend mit Mock-AI verarbeitet. Für lokalen Offlinebetrieb den
+Provider ausdrücklich setzen, zum Beispiel
+`INVOICE_AI_PROVIDER=mock ./scripts/dev-start.sh full`. Tests injizieren Mock-AI
+und stellen keine OpenAI-Verbindung her. Ein gesetzter `OPENAI_API_KEY` allein
+wählt keinen Provider und verändert `ai.provider` nicht. Für OpenAI müssen der
+Provider `openai` (Properties oder `INVOICE_AI_PROVIDER=openai`) und der Key
+`OPENAI_API_KEY` gemeinsam konfiguriert sein. Der Key gehört ausschließlich
+in die Betriebsumgebung, nicht ins Repository. Die UI ruft OpenAI nicht direkt
+auf; Watch verarbeitet Uploads mit dem konfigurierten Provider.
 
 ## Speicherung und Sicherheit
 

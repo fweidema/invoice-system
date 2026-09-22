@@ -40,7 +40,7 @@ Weitere Details stehen in [docs/architecture-overview.md](docs/architecture-over
 - Java 21
 - Maven Wrapper aus dem Repository (`mvnw` / `mvnw.cmd`)
 - Optional fuer echte OCR: ein installiertes OCR-Kommando, standardmaessig `ocrmypdf`
-- Optional fuer OpenAI: Umgebungsvariable `OPENAI_API_KEY`
+- Für OpenAI müssen Provider `openai` und Umgebungsvariable `OPENAI_API_KEY` gesetzt sein; ein Schlüssel allein aktiviert den Provider nicht
 
 ## Build und Tests
 
@@ -225,7 +225,7 @@ API-Container. Der API-Healthcheck nutzt `GET /api/health`; Batch und Watch
 nutzen den rein containerinternen `/app/container-self-check.sh` ohne
 Docker-Zugriff oder Dokumentverarbeitung.
 
-Der Worker kann als einzelner Docker-Container mit persistenter Runtime-Struktur betrieben werden. Der produktionsnahe Mock-Test nutzt weiterhin `ai.provider=mock` und benoetigt keinen OpenAI-Key.
+Der Worker kann als einzelner Docker-Container mit persistenter Runtime-Struktur betrieben werden. Die versionierte Docker-Konfiguration verwendet `ai.provider=openai`: konfigurieren Sie `OPENAI_API_KEY` außerhalb des Repositories. Für lokale Läufe ohne externe AI-Aufrufe den Mock-Provider ausdrücklich mit `INVOICE_AI_PROVIDER=mock` wählen; ein vorhandener API-Key ändert den Provider nicht.
 
 ```bash
 ./scripts/prepare-runtime.sh
@@ -238,7 +238,7 @@ docker compose --profile api up -d invoice-worker-api
 docker compose --profile ui up -d invoice-worker-ui
 ```
 
-Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil bindet ausschließlich `127.0.0.1:8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil entsprechend `127.0.0.1:8081` und `INVOICE_UI_PORT`. Der VPS-Zugriff erfolgt über Tailscale Serve ausschließlich zur UI; die API bleibt intern. Einrichtung, Abnahme und Rollback: [VPS-Zugriffssicherheit](docs/vps-access-security.md). Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `INVOICE_AI_PROVIDER=openai` und `OPENAI_API_KEY` als Environment-Variablen exportieren.
+Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil bindet ausschließlich `127.0.0.1:8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil entsprechend `127.0.0.1:8081` und `INVOICE_UI_PORT`. Der VPS-Zugriff erfolgt über Tailscale Serve ausschließlich zur UI; die API bleibt intern. Einrichtung, Abnahme und Rollback: [VPS-Zugriffssicherheit](docs/vps-access-security.md). Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Für Docker-OpenAI-Betrieb müssen `INVOICE_AI_PROVIDER=openai` (oder die Produktions-Properties) und `OPENAI_API_KEY` als Environment-Variablen gesetzt sein. `OPENAI_API_KEY` allein wählt keinen Provider.
 
 ## Staging-Deployment
 
@@ -282,10 +282,8 @@ Die Navigation „Rechnungen hochladen“ öffnet `/upload`: PDF-Dateien per
 Drag-and-drop oder Dateiauswahl einreichen (standardmäßig 10 Dateien, je 20 MiB).
 Der Upload streamt auf Disk und übergibt erst vollständige PDFs atomar an den
 Watch-Service. „Zur Verarbeitung eingereiht“ bestätigt ausschließlich die
-Übergabe; OCR und Mock-AI laufen anschließend im vorhandenen Workflow.
+Übergabe; OCR und der konfigurierte AI-Provider laufen anschließend im vorhandenen Workflow.
 
-`./scripts/dev-start.sh full` (auch `ui`) startet UI, API und Watch gemeinsam;
-zuvor bei Codeänderungen `docker compose --profile watch --profile ui build`
-ausführen. Die Standard-Docker-Konfiguration nutzt Mock-AI.
+`INVOICE_AI_PROVIDER=mock ./scripts/dev-start.sh full` (auch `ui`) startet UI, API und Watch gemeinsam und wählt den Mock-Provider ausdrücklich. Bei Codeänderungen zuvor `docker compose --profile watch --profile ui build` ausführen. Die Produktionskonfiguration nutzt OpenAI und erwartet einen Provider sowie einen Key aus der Betriebsumgebung.
 `./scripts/dev-stop.sh` stoppt alle vier Services einschließlich UI.
 [Betrieb, Tests und Rollback](docs/invoice-upload.md).

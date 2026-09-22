@@ -22,7 +22,7 @@ dieser Gruppe sein. `./scripts/prepare-runtime.sh` legt nur fehlende persistente
 Verzeichnisse an und prueft ihre Beschreibbarkeit. Es veraendert weder
 Eigentuemer noch Modi bestehender Dateien. Die Konfiguration liegt in
 `docker/application.properties`; Secrets gehoeren nicht in diese Datei oder in
-Git. Ein OpenAI-Key wird nur ueber `OPENAI_API_KEY` bereitgestellt.
+Git. Die versionierte Docker-Konfiguration wählt `ai.provider=openai`; der OpenAI-Key wird separat über `OPENAI_API_KEY` bereitgestellt. Ein Key allein aktiviert keinen Provider.
 
 ## Privater Anwendungszugriff
 

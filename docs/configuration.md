@@ -12,7 +12,7 @@ Werte werden in dieser Reihenfolge angewendet. Spaetere Quellen ueberschreiben f
 4. Umgebungsvariablen
 5. Explizite CLI-Optionen
 
-`OPENAI_API_KEY` ist ausschliesslich fuer den OpenAI-API-Key zustaendig und wird nicht in `ApplicationConfiguration` gespeichert.
+`OPENAI_API_KEY` liefert ausschliesslich den Key an den OpenAI-Provider. Er wählt den Provider nicht aus und wird nicht in `ApplicationConfiguration` gespeichert. Für OpenAI müssen `ai.provider=openai` und `OPENAI_API_KEY` beide gesetzt sein.
 
 ## Properties
 
@@ -259,6 +259,23 @@ Docker liest die Upload-Properties aus der gemounteten Konfiguration. Für
 Environment-Overrides im UI-Container die Variablen ausdrücklich in einer
 lokalen Compose-Erweiterung setzen; die Host-Umgebung wird nicht automatisch
 in Container übernommen. API/UI bleiben ausschließlich auf Host-Loopback.
-Die Standard-Docker-Konfiguration verwendet `ai.provider=mock`; ein explizites
-`INVOICE_AI_PROVIDER` wird in Batch/Watch weitergereicht. Leere Werte lassen
-den Properties-Wert gelten. Details: [Rechnungsupload](invoice-upload.md).
+Die Produktionsdatei `docker/application.properties` verwendet `ai.provider=openai` (unverändert zum Stand vor Sprint 042). Ein explizites `INVOICE_AI_PROVIDER` wird in Batch/Watch weitergereicht und überschreibt Properties nur, wenn es nicht leer ist. Lokaler Offlinebetrieb muss deshalb ausdrücklich `INVOICE_AI_PROVIDER=mock` setzen; ein Key allein aktiviert keinen Provider. Details: [Rechnungsupload](invoice-upload.md).
+
+## Produktions- und lokaler AI-Provider
+
+Die versionierte Docker-Konfiguration ist produktionsorientiert und wählt
+`ai.provider=openai`. Der Key wird separat über `OPENAI_API_KEY` in der
+Betriebsumgebung bereitgestellt. Das Vorhandensein eines Keys schaltet einen
+Mock-Provider nicht automatisch auf OpenAI um; umgekehrt macht ein fehlender
+Key einen konfigurierten OpenAI-Provider nicht zum Mock. Ein echter Upload ohne
+Key wird bei AI-Verarbeitung fehlschlagen und den vorhandenen Fehlerpfad nutzen.
+
+Für lokale Entwicklung explizit `INVOICE_AI_PROVIDER=mock` verwenden, etwa:
+
+```bash
+INVOICE_AI_PROVIDER=mock ./scripts/dev-start.sh full
+```
+
+Der Wert wird von Docker Compose an Worker und Watch weitergereicht. Leere oder
+nicht gesetzte Werte lassen die Properties-Auswahl `openai` wirksam. CI- und
+Maven-Tests verwenden Mock-Test-Doubles und stellen keine OpenAI-Verbindung her.

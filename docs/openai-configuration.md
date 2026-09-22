@@ -9,7 +9,7 @@ Die Anwendung kann den AI-Provider ueber Properties auswaehlen.
 
 ## API-Key
 
-Der OpenAI-Provider liest den API-Key ausschliesslich aus der Umgebungsvariable `OPENAI_API_KEY`.
+Der OpenAI-Provider liest den API-Key ausschliesslich aus der Umgebungsvariable `OPENAI_API_KEY`. Diese Variable waehlt den Provider nicht aus: `ai.provider=openai` muss zusaetzlich in der Properties-Konfiguration stehen. Ein Key allein aktiviert OpenAI nicht.
 Der Key darf nicht in Properties-Dateien, Testressourcen, Logs oder im Repository gespeichert werden.
 
 ## Beispielkonfiguration
@@ -40,7 +40,7 @@ Unit- und Integrationstests duerfen keine echten OpenAI-Aufrufe ausfuehren und v
 
 ## Produktiver Start
 
-Ein produktiver Start kann ein Profil und eine externe Properties-Datei verwenden:
+Ein produktiver Start kann ein Profil und eine externe Properties-Datei verwenden. Die Datei muss `ai.provider=openai` enthalten und die Betriebsumgebung `OPENAI_API_KEY` setzen:
 
 ```bash
 export OPENAI_API_KEY=...
@@ -57,5 +57,4 @@ java -jar invoice-worker/target/invoice-worker-0.2.0-SNAPSHOT.jar process --prof
 ## Datenschutz
 
 Rechnungstexte koennen personenbezogene oder vertrauliche Daten enthalten. Der OpenAI-Provider sollte nur verwendet werden, wenn die Verarbeitung dieser Daten mit den geltenden Datenschutz-, Vertrags- und Betriebsanforderungen vereinbar ist. Keine echten Rechnungen fuer Tests oder Beispiele verwenden.
-
 
