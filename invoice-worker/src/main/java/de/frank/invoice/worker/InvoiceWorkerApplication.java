@@ -143,7 +143,8 @@ public class InvoiceWorkerApplication {
                 configuration.ui().maximumExportInvoices());
         final InvoiceUiServer uiServer = new InvoiceUiServer(configuration.ui(), exportService,
                 new DocumentSubmissionService(configuration.upload(),
-                        new FileSystemDocumentSubmissionStore(configuration.upload().inputDirectory())));
+                        new FileSystemDocumentSubmissionStore(configuration.upload().inputDirectory())),
+                configuration.watch().directory());
         Runtime.getRuntime().addShutdownHook(new Thread(uiServer::close, "invoice-ui-shutdown"));
         try {
             uiServer.start();

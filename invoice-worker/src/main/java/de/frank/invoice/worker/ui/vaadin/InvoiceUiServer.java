@@ -1,33 +1,31 @@
 package de.frank.invoice.worker.ui.vaadin;
 
 import com.vaadin.flow.server.InitParameters;
-import de.frank.invoice.worker.application.configuration.UploadConfiguration;
-import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
-import de.frank.invoice.worker.infrastructure.submission.FileSystemDocumentSubmissionStore;
-import de.frank.invoice.worker.ui.vaadin.views.upload.InvoiceUploadView;
 import com.vaadin.flow.server.startup.LookupServletContainerInitializer;
 import com.vaadin.flow.server.startup.RouteRegistryInitializer;
 import com.vaadin.flow.server.startup.VaadinAppShellInitializer;
 import de.frank.invoice.worker.application.configuration.UiConfiguration;
 import de.frank.invoice.worker.application.export.InvoiceExportService;
-import org.apache.catalina.Context;
-import org.apache.catalina.LifecycleException;
-import org.apache.catalina.connector.Connector;
-import org.apache.catalina.startup.Tomcat;
-import org.apache.catalina.Wrapper;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-import de.frank.invoice.worker.ui.vaadin.views.export.InvoiceExportView;
+import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
 import de.frank.invoice.worker.ui.vaadin.manualreview.HttpManualReviewApi;
 import de.frank.invoice.worker.ui.vaadin.manualreview.ManualReviewApi;
+import de.frank.invoice.worker.ui.vaadin.views.export.InvoiceExportView;
 import de.frank.invoice.worker.ui.vaadin.views.manualreview.ManualReviewView;
+import de.frank.invoice.worker.ui.vaadin.views.upload.InvoiceUploadView;
+import org.apache.catalina.Context;
+import org.apache.catalina.LifecycleException;
+import org.apache.catalina.Wrapper;
+import org.apache.catalina.connector.Connector;
+import org.apache.catalina.startup.Tomcat;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.nio.file.Path;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * Embedded Tomcat host for the Vaadin invoice export UI.
+ * Embedded Tomcat host for the Vaadin invoice UI.
  */
 public class InvoiceUiServer implements AutoCloseable {
 
@@ -41,41 +39,26 @@ public class InvoiceUiServer implements AutoCloseable {
     private volatile boolean started;
 
     /**
-     * Creates the UI server.
+     * Creates the UI host with explicit export and upload application services.
      *
      * @param configuration HTTP and shutdown configuration
      * @param invoiceExportService export application service
+     * @param submissionService upload application service targeting the watch input directory
      */
-    public InvoiceUiServer(
-            final UiConfiguration configuration,
-            final InvoiceExportService invoiceExportService) {
-        this(configuration, invoiceExportService, new HttpManualReviewApi(configuration.manualReviewApiBaseUri()),
-                defaultSubmissionService());
-    }
-
-    /** Creates the UI host with an explicitly configured upload application service. */
     public InvoiceUiServer(final UiConfiguration configuration, final InvoiceExportService invoiceExportService,
-                           final DocumentSubmissionService submissionService) {
-        this(configuration, invoiceExportService, new HttpManualReviewApi(configuration.manualReviewApiBaseUri()),
-                submissionService);
-    }
-
-    InvoiceUiServer(final UiConfiguration configuration, final InvoiceExportService invoiceExportService,
-                    final ManualReviewApi manualReviewApi) {
-        this(configuration, invoiceExportService, manualReviewApi, defaultSubmissionService());
-    }
-
-    private InvoiceUiServer(final UiConfiguration configuration, final InvoiceExportService invoiceExportService,
-                            final ManualReviewApi manualReviewApi, final DocumentSubmissionService submissionService) {
+                           final DocumentSubmissionService submissionService,
+                           final Path watchedInputDirectory) {
         this.configuration = Objects.requireNonNull(configuration);
         this.invoiceExportService = Objects.requireNonNull(invoiceExportService);
-        this.manualReviewApi = Objects.requireNonNull(manualReviewApi);
-        this.submissionService = Objects.requireNonNull(submissionService);
-    }
-
-    private static DocumentSubmissionService defaultSubmissionService() {
-        final UploadConfiguration upload = UploadConfiguration.defaults(Path.of("input"));
-        return new DocumentSubmissionService(upload, new FileSystemDocumentSubmissionStore(upload.inputDirectory()));
+        this.submissionService = Objects.requireNonNull(
+                submissionService, "A configured DocumentSubmissionService is required");
+        this.manualReviewApi = new HttpManualReviewApi(configuration.manualReviewApiBaseUri());
+        final Path uploadDirectory = submissionService.configuration().inputDirectory().toAbsolutePath().normalize();
+        final Path watchDirectory = Objects.requireNonNull(watchedInputDirectory)
+                .toAbsolutePath().normalize();
+        if (!uploadDirectory.equals(watchDirectory)) {
+            throw new IllegalArgumentException("Upload input directory must match the watch input directory");
+        }
     }
 
     /**

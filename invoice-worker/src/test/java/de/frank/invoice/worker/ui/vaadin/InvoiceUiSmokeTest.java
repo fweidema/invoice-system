@@ -1,9 +1,13 @@
 package de.frank.invoice.worker.ui.vaadin;
 
 import de.frank.invoice.worker.application.configuration.UiConfiguration;
+import de.frank.invoice.worker.application.configuration.UploadConfiguration;
+import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
+import de.frank.invoice.worker.infrastructure.submission.FileSystemDocumentSubmissionStore;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 import java.net.URI;
 import java.net.http.HttpClient;
@@ -11,6 +15,7 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Locale;
 
@@ -30,14 +35,19 @@ class InvoiceUiSmokeTest {
     private static InvoiceUiServer server;
     private static HttpClient httpClient;
     private static URI baseUri;
+    @TempDir
+    private static Path temporaryDirectory;
 
     @BeforeAll
     static void startServer() {
         final UiConfiguration configuration =
                 new UiConfiguration("127.0.0.1", 0, Duration.ofSeconds(2), 100);
+        final var uploadConfiguration = UploadConfiguration.defaults(temporaryDirectory);
+        final var submissionService = new DocumentSubmissionService(uploadConfiguration,
+                new FileSystemDocumentSubmissionStore(temporaryDirectory));
         server = new InvoiceUiServer(configuration, request -> {
             throw new AssertionError("UI bootstrap must not invoke the invoice export service");
-        });
+        }, submissionService, temporaryDirectory);
         server.start();
         httpClient = HttpClient.newBuilder()
                 .connectTimeout(CONNECT_TIMEOUT)
