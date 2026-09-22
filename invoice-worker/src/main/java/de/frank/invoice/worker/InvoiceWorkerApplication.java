@@ -27,6 +27,8 @@ import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessin
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingStateRepository;
 import de.frank.invoice.worker.infrastructure.watch.NioDirectoryWatcher;
 import de.frank.invoice.worker.ui.vaadin.InvoiceUiServer;
+import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
+import de.frank.invoice.worker.infrastructure.submission.FileSystemDocumentSubmissionStore;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -139,7 +141,9 @@ public class InvoiceWorkerApplication {
                 List.of(new CsvInvoiceExporter(), new ExcelInvoiceExporter()),
                 Clock.systemDefaultZone(),
                 configuration.ui().maximumExportInvoices());
-        final InvoiceUiServer uiServer = new InvoiceUiServer(configuration.ui(), exportService);
+        final InvoiceUiServer uiServer = new InvoiceUiServer(configuration.ui(), exportService,
+                new DocumentSubmissionService(configuration.upload(),
+                        new FileSystemDocumentSubmissionStore(configuration.upload().inputDirectory())));
         Runtime.getRuntime().addShutdownHook(new Thread(uiServer::close, "invoice-ui-shutdown"));
         try {
             uiServer.start();

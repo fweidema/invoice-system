@@ -5,6 +5,7 @@ import com.vaadin.flow.server.VaadinServletService;
 import de.frank.invoice.worker.application.export.InvoiceExportService;
 import de.frank.invoice.worker.ui.vaadin.manualreview.ManualReviewApi;
 import jakarta.servlet.ServletException;
+import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
 
 import java.util.Objects;
 
@@ -13,6 +14,7 @@ import java.util.Objects;
  */
 public class InvoiceUiServlet extends VaadinServlet {
 
+    static final String SUBMISSION_SERVICE_ATTRIBUTE = InvoiceUiServlet.class.getName() + ".submissionService";
     static final String EXPORT_SERVICE_ATTRIBUTE = InvoiceUiServlet.class.getName() + ".exportService";
     static final String MANUAL_REVIEW_API_ATTRIBUTE = InvoiceUiServlet.class.getName() + ".manualReviewApi";
 
@@ -32,9 +34,12 @@ public class InvoiceUiServlet extends VaadinServlet {
         final ManualReviewApi manualReviewApi = Objects.requireNonNull(
                 (ManualReviewApi) getServletContext().getAttribute(MANUAL_REVIEW_API_ATTRIBUTE),
                 "manualReviewApi servlet context attribute must not be null");
+        final DocumentSubmissionService submissionService = Objects.requireNonNull(
+                (DocumentSubmissionService) getServletContext().getAttribute(SUBMISSION_SERVICE_ATTRIBUTE));
         service.addSessionInitListener(event -> {
             event.getSession().setAttribute(InvoiceExportService.class, invoiceExportService);
             event.getSession().setAttribute(ManualReviewApi.class, manualReviewApi);
+            event.getSession().setAttribute(DocumentSubmissionService.class, submissionService);
         });
     }
 }

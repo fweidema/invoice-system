@@ -1,6 +1,10 @@
 package de.frank.invoice.worker.ui.vaadin;
 
 import com.vaadin.flow.server.InitParameters;
+import de.frank.invoice.worker.application.configuration.UploadConfiguration;
+import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
+import de.frank.invoice.worker.infrastructure.submission.FileSystemDocumentSubmissionStore;
+import de.frank.invoice.worker.ui.vaadin.views.upload.InvoiceUploadView;
 import com.vaadin.flow.server.startup.LookupServletContainerInitializer;
 import com.vaadin.flow.server.startup.RouteRegistryInitializer;
 import com.vaadin.flow.server.startup.VaadinAppShellInitializer;
@@ -32,6 +36,7 @@ public class InvoiceUiServer implements AutoCloseable {
     private final UiConfiguration configuration;
     private final InvoiceExportService invoiceExportService;
     private final ManualReviewApi manualReviewApi;
+    private final DocumentSubmissionService submissionService;
     private final Tomcat tomcat = new Tomcat();
     private volatile boolean started;
 
@@ -44,20 +49,33 @@ public class InvoiceUiServer implements AutoCloseable {
     public InvoiceUiServer(
             final UiConfiguration configuration,
             final InvoiceExportService invoiceExportService) {
-        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
-        this.invoiceExportService = Objects.requireNonNull(
-                invoiceExportService, "invoiceExportService must not be null");
-        this.manualReviewApi = new HttpManualReviewApi(configuration.manualReviewApiBaseUri());
+        this(configuration, invoiceExportService, new HttpManualReviewApi(configuration.manualReviewApiBaseUri()),
+                defaultSubmissionService());
     }
 
-    InvoiceUiServer(
-            final UiConfiguration configuration,
-            final InvoiceExportService invoiceExportService,
-            final ManualReviewApi manualReviewApi) {
-        this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
-        this.invoiceExportService = Objects.requireNonNull(
-                invoiceExportService, "invoiceExportService must not be null");
-        this.manualReviewApi = Objects.requireNonNull(manualReviewApi, "manualReviewApi must not be null");
+    /** Creates the UI host with an explicitly configured upload application service. */
+    public InvoiceUiServer(final UiConfiguration configuration, final InvoiceExportService invoiceExportService,
+                           final DocumentSubmissionService submissionService) {
+        this(configuration, invoiceExportService, new HttpManualReviewApi(configuration.manualReviewApiBaseUri()),
+                submissionService);
+    }
+
+    InvoiceUiServer(final UiConfiguration configuration, final InvoiceExportService invoiceExportService,
+                    final ManualReviewApi manualReviewApi) {
+        this(configuration, invoiceExportService, manualReviewApi, defaultSubmissionService());
+    }
+
+    private InvoiceUiServer(final UiConfiguration configuration, final InvoiceExportService invoiceExportService,
+                            final ManualReviewApi manualReviewApi, final DocumentSubmissionService submissionService) {
+        this.configuration = Objects.requireNonNull(configuration);
+        this.invoiceExportService = Objects.requireNonNull(invoiceExportService);
+        this.manualReviewApi = Objects.requireNonNull(manualReviewApi);
+        this.submissionService = Objects.requireNonNull(submissionService);
+    }
+
+    private static DocumentSubmissionService defaultSubmissionService() {
+        final UploadConfiguration upload = UploadConfiguration.defaults(Path.of("input"));
+        return new DocumentSubmissionService(upload, new FileSystemDocumentSubmissionStore(upload.inputDirectory()));
     }
 
     /**
@@ -133,13 +151,15 @@ public class InvoiceUiServer implements AutoCloseable {
         configureStaticResourceMimeMappings(context);
         context.addServletContainerInitializer(new LookupServletContainerInitializer(), Set.of());
         context.addServletContainerInitializer(
-                new RouteRegistryInitializer(), Set.of(InvoiceExportView.class, ManualReviewView.class));
+                new RouteRegistryInitializer(), Set.of(InvoiceExportView.class, ManualReviewView.class, InvoiceUploadView.class));
         context.addServletContainerInitializer(
                 new VaadinAppShellInitializer(), Set.of(InvoiceUiAppShell.class));
         context.getServletContext().setAttribute(
                 InvoiceUiServlet.EXPORT_SERVICE_ATTRIBUTE, invoiceExportService);
         context.getServletContext().setAttribute(
                 InvoiceUiServlet.MANUAL_REVIEW_API_ATTRIBUTE, manualReviewApi);
+
+        context.getServletContext().setAttribute(InvoiceUiServlet.SUBMISSION_SERVICE_ATTRIBUTE, submissionService);
 
         final Wrapper health = Tomcat.addServlet(context, "ui-health", new UiHealthServlet());
         health.setLoadOnStartup(1);

@@ -1,6 +1,7 @@
 package de.frank.invoice.worker.ui.vaadin;
 
 import com.vaadin.flow.component.applayout.AppLayout;
+import de.frank.invoice.worker.ui.vaadin.views.upload.InvoiceUploadView;
 import com.vaadin.flow.component.html.H1;
 import com.vaadin.flow.component.sidenav.SideNav;
 import com.vaadin.flow.component.sidenav.SideNavItem;
@@ -23,6 +24,7 @@ public class MainLayout extends AppLayout {
         final SideNav navigation = new SideNav();
         navigation.addItem(new SideNavItem("Rechnungen exportieren", InvoiceExportView.class));
         navigation.addItem(new SideNavItem("Manual Review", ManualReviewView.class));
+        navigation.addItem(new SideNavItem("Rechnungen hochladen", InvoiceUploadView.class));
         addToDrawer(navigation);
     }
 }
