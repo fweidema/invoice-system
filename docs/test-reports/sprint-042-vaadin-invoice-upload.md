@@ -87,3 +87,40 @@ Gemäß [Upload-Betriebsanleitung](../invoice-upload.md):
    Anwendungsports müssen weiter unerreichbar sein.
 5. Geplanten Rollback ohne Löschung eingereihter PDFs und ohne Datenbank-Restore
    im freigegebenen Testbetrieb prüfen.
+
+## Review-Folgekorrekturen
+
+Nach der initialen Sprint-Abnahme wurden folgende Review-Findings behoben:
+
+- `docker/application.properties` ist auf den vor Sprint 042 geltenden
+  `ai.provider=openai` zurückgesetzt. Lokaler Mock-Betrieb wird ausdrücklich
+  mit `INVOICE_AI_PROVIDER=mock` ausgewählt. Ein OpenAI-Key allein ändert den
+  Provider nicht. Regressionstests prüfen Produktions-Properties, lokalen
+  Mock-Override und Provider-Verhalten ohne OpenAI-Aufruf.
+- `scripts/dev-start.sh ui|full` wartet mit Timeout auf Running-Status und
+  gesunden Status von Watch, API und UI. Fehler nennen Dienst, Status und
+  Compose-Logs-Befehl. Shell-Tests simulieren verzögert gesunde Dienste sowie
+  fehlenden und ausgefallenen Watch-Service.
+- `scripts/dev-start.sh` und `scripts/dev-doctor.sh` nutzen den gemeinsamen
+  Healthcheck-Helper mit `curl --noproxy 127.0.0.1,localhost,::1`. Ein
+  Deployment-Test setzt HTTP-/HTTPS-Proxyvariablen und prüft die übergebenen
+  No-Proxy-Optionen.
+- `InvoiceUiServer` verlangt einen injizierten Submission-Service und den
+  erwarteten Watch-Eingangspfad. Ein abweichendes Uploadverzeichnis wird beim
+  Erzeugen des Servers abgelehnt. Tests nutzen temporäre Verzeichnisse.
+- README, OpenAI-, Konfigurations- und Upload-Dokumentation unterscheiden jetzt
+  Produktionsprovider und expliziten lokalen Mock-Betrieb.
+
+Tatsächliche Prüfungen nach den Folgekorrekturen: alle sieben
+`deploy/tests/*-test.sh`, `bash scripts/dev-test.sh`,
+`bash scripts/dev-build.sh` (führt `clean verify` aus),
+`docker compose --profile watch --profile ui config`, Shell-Syntaxprüfung der
+geänderten Skripte, `git diff --check` und die Credential-Signatursuche.
+Keine produktiven VPS-, Tailscale-, Firewall- oder Zugangseinstellungen wurden
+verändert.
+
+Folgekorrektur-Testzahlen: `dev-test.sh` und `dev-build.sh` bestanden jeweils mit
+394 Tests, 0 Failures, 0 Errors und 0 übersprungenen Tests. Die sieben
+Deployment-Skripte bestanden erneut. Der finale Compose-Config-Aufruf, alle
+geänderten Shell-Syntaxprüfungen, `git diff --check` und Credential-Signatursuche
+endeten ebenfalls erfolgreich ohne Treffer.
