@@ -24,6 +24,19 @@ Eigentuemer noch Modi bestehender Dateien. Die Konfiguration liegt in
 `docker/application.properties`; Secrets gehoeren nicht in diese Datei oder in
 Git. Ein OpenAI-Key wird nur ueber `OPENAI_API_KEY` bereitgestellt.
 
+## Privater Anwendungszugriff
+
+API/UI sind ausschließlich an Host-Loopback gebunden. Für den VPS-Browserzugriff
+Tailscale Serve zur UI verwenden; die API bleibt im Compose-Netz unter
+`http://invoice-worker-api:8080/`. Öffentliche Ports 8080/8081 und Funnel sind
+nicht vorgesehen. Einrichtung, ACL-Abnahme, Betrieb und sicherer Rollback
+sind verbindlich in [vps-access-security.md](vps-access-security.md) beschrieben.
+Öffentliches HTTPS ist nur über einen zusätzlich authentifizierenden Reverse
+Proxy auf Port 443 zulässig. Tailscale-Installation, Anmeldung und Änderungen
+auf dem VPS bleiben manuell. Vor dem Rollout lokal
+`bash deploy/tests/compose-port-security-test.sh` ausführen (Python 3 und Compose).
+Auch bei einem Code-Rollback müssen die Loopback-Bindungen erhalten bleiben.
+
 ## Erstinstallation
 
 ```bash
@@ -122,8 +135,8 @@ Die wichtigsten optionalen Umgebungsvariablen sind:
 | `STAGING_BACKUP_DIR` | `backup/staging` | Backup-Ziel |
 | `STAGING_CONFIG_FILE` | `docker/application.properties` | externe Konfiguration |
 | `STAGING_DATABASE_FILE` | `runtime/database/invoice-system.db` | SQLite-Datei |
-| `INVOICE_API_PORT` | `8080` | API-Port auf dem Host |
-| `INVOICE_UI_PORT` | `8081` | UI-Port auf dem Host |
+| `INVOICE_API_PORT` | `8080` | API-Port ausschließlich auf `127.0.0.1` |
+| `INVOICE_UI_PORT` | `8081` | UI-Port ausschließlich auf `127.0.0.1` |
 | `STAGING_API_URL` | `http://127.0.0.1:8080/api/health` | API-Pruefziel |
 | `STAGING_UI_URL` | `http://127.0.0.1:8081/health` | UI-Pruefziel |
 

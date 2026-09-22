@@ -153,7 +153,7 @@ watch.processExistingFilesOnStartup=true
 archive.directory=/srv/invoice-system/archive
 persistence.databaseFile=/srv/invoice-system/runtime/database/invoice-system.db
 
-ui.host=0.0.0.0
+ui.host=127.0.0.1
 ui.port=8081
 ui.shutdownTimeout=10s
 ui.maximumExportInvoices=10000
@@ -215,3 +215,19 @@ Authorization-Daten. Externe Fehlertexte werden vor der Speicherung auf
 Die Migration ist rein additiv (`CREATE TABLE/INDEX IF NOT EXISTS`) und kann
 wiederholt gegen eine bestehende Datenbank laufen. Vor einem produktiven Update
 bleibt trotzdem ein Backup der SQLite-Datei empfohlen.
+
+## Docker-Portbindungen und VPS-Zugriff
+
+Compose veröffentlicht API und UI ausschließlich an `127.0.0.1`.
+`INVOICE_API_PORT` (8080) und `INVOICE_UI_PORT` (8081) ändern hier nur die
+Host-Portnummern; die Container-Ports bleiben 8080/8081. In
+`docker/application.properties` bleiben die Listener auf `0.0.0.0` innerhalb
+der Container, damit Docker-NAT und interne Kommunikation funktionieren.
+Die UI nutzt im Compose-Netz `http://invoice-worker-api:8080/`;
+`INVOICE_UI_MANUAL_REVIEW_API_BASE_URI` im Standardbetrieb nicht überschreiben.
+Außerhalb von Docker gelten die Loopback-Defaults der Java-Anwendung.
+
+Tailscale Serve leitet ausschließlich zur Loopback-UI weiter. Keine öffentliche
+API, kein Funnel und keine Java-Bearer-Token-Authentifizierung. Details und
+optionales authentifiziertes HTTPS auf Port 443 stehen in
+[vps-access-security.md](vps-access-security.md).

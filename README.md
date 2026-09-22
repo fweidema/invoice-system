@@ -237,7 +237,7 @@ docker compose --profile api up -d invoice-worker-api
 docker compose --profile ui up -d invoice-worker-ui
 ```
 
-Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil veroeffentlicht standardmaessig Port `8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil nutzt entsprechend Port `8081` und `INVOICE_UI_PORT`. Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
+Die Konfiguration liegt unter `docker/application.properties` und wird read-only nach `/config/application.properties` gemountet. Das API-Profil bindet ausschließlich `127.0.0.1:8080`, ueberschreibbar mit `INVOICE_API_PORT`; das UI-Profil entsprechend `127.0.0.1:8081` und `INVOICE_UI_PORT`. Der VPS-Zugriff erfolgt über Tailscale Serve ausschließlich zur UI; die API bleibt intern. Einrichtung, Abnahme und Rollback: [VPS-Zugriffssicherheit](docs/vps-access-security.md). Laufzeitdaten bleiben unter `runtime/input`, `runtime/ocr`, `runtime/archive`, `runtime/database` und `runtime/logs` erhalten. Fuer echten OpenAI-Betrieb erst nach erfolgreichem Mock-Test `ai.provider=openai` setzen und `OPENAI_API_KEY` als Environment-Variable exportieren.
 
 ## Staging-Deployment
 

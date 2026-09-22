@@ -82,3 +82,15 @@ integriert werden koennen.
 - Services, Repositories, REST-Schnittstellen und KI-Clients werden getrennt vom Domaenenmodell eingefuehrt.
 - Oeffentliche APIs werden dokumentiert und moeglichst stabil gehalten.
 - Neue Abhaengigkeiten werden nur eingefuehrt, wenn Standard-JDK-Mittel nicht sinnvoll ausreichen.
+
+## VPS-Zugriffsgrenze (Sprint 041)
+
+Autorisierte Tailnet-Clients erreichen per HTTPS Tailscale Serve auf dem Host.
+Serve leitet ausschließlich an die UI auf `127.0.0.1:8081` weiter. Die UI nutzt
+die API intern über `http://invoice-worker-api:8080/`. Docker veröffentlicht
+auch den API-Diagnoseport ausschließlich auf `127.0.0.1:8080`. Containerinterne
+Listener bleiben auf `0.0.0.0`; öffentliche Anwendungsports sind ausgeschlossen.
+Die Zugriffskontrolle erfolgt im Tailnet, ohne Bearer-Token-Authentifizierung
+in Java. Funnel ist kein Standardzugangsweg. Optionales öffentliches HTTPS
+erfordert einen Reverse Proxy auf Port 443 mit zusätzlicher Authentifizierung.
+[Betriebs- und Rollback-Anleitung](vps-access-security.md).

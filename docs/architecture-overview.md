@@ -121,3 +121,15 @@ vollstaendig Vaadin-unabhaengig.
 ## Watch-Service
 
 Der Watch-Service liegt in pplication.watch und infrastructure.watch. Er nutzt Java NIO WatchService, prueft Dateistabilitaet und delegiert einzelne Dokumente an InvoiceWorker.processDocument(Path). Die Workflow-Fachlogik bleibt im bestehenden DocumentProcessingWorkflow. Details stehen in [watch-service.md](watch-service.md).
+
+## VPS-Zugriffsgrenze (Sprint 041)
+
+Autorisierte Tailnet-Clients erreichen per HTTPS Tailscale Serve auf dem Host.
+Serve leitet ausschließlich an die UI auf `127.0.0.1:8081` weiter. Die UI nutzt
+die API intern über `http://invoice-worker-api:8080/`. Docker veröffentlicht
+auch den API-Diagnoseport ausschließlich auf `127.0.0.1:8080`. Containerinterne
+Listener bleiben auf `0.0.0.0`; öffentliche Anwendungsports sind ausgeschlossen.
+Die Zugriffskontrolle erfolgt im Tailnet, ohne Bearer-Token-Authentifizierung
+in Java. Funnel ist kein Standardzugangsweg. Optionales öffentliches HTTPS
+erfordert einen Reverse Proxy auf Port 443 mit zusätzlicher Authentifizierung.
+[Betriebs- und Rollback-Anleitung](vps-access-security.md).
