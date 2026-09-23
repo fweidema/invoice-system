@@ -165,3 +165,40 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+
+  invoice-oauth2-proxy:
+    profiles:
+      - public
+    image: quay.io/oauth2-proxy/oauth2-proxy:v7.15.4
+    user: "10001:10001"
+    restart: unless-stopped
+    environment:
+      OAUTH2_PROXY_PROVIDER: google
+      OAUTH2_PROXY_CLIENT_ID: ${OAUTH2_PROXY_CLIENT_ID:-}
+      OAUTH2_PROXY_CLIENT_SECRET: ${OAUTH2_PROXY_CLIENT_SECRET:-}
+      OAUTH2_PROXY_COOKIE_SECRET: ${OAUTH2_PROXY_COOKIE_SECRET:-}
+      OAUTH2_PROXY_AUTHENTICATED_EMAILS_FILE: /etc/oauth2-proxy/allowed-emails
+      OAUTH2_PROXY_REDIRECT_URL: https://invoice.mynet-online.de/oauth2/callback
+      OAUTH2_PROXY_HTTP_ADDRESS: 0.0.0.0:4180
+      OAUTH2_PROXY_UPSTREAMS: static://200
+      OAUTH2_PROXY_REVERSE_PROXY: "true"
+      OAUTH2_PROXY_TRUSTED_PROXY_IPS: ${OAUTH2_PROXY_TRUSTED_PROXY_IPS:-127.0.0.1/32}
+      OAUTH2_PROXY_WHITELIST_DOMAINS: invoice.mynet-online.de
+      OAUTH2_PROXY_CODE_CHALLENGE_METHOD: S256
+      OAUTH2_PROXY_SKIP_PROVIDER_BUTTON: "true"
+      OAUTH2_PROXY_COOKIE_NAME: __Host-invoice_oauth2
+      OAUTH2_PROXY_COOKIE_SECURE: "true"
+      OAUTH2_PROXY_COOKIE_HTTPONLY: "true"
+      OAUTH2_PROXY_COOKIE_SAMESITE: lax
+      OAUTH2_PROXY_COOKIE_EXPIRE: 8h
+      OAUTH2_PROXY_AUTH_LOGGING: "false"
+      OAUTH2_PROXY_REQUEST_LOGGING: "false"
+    ports:
+      - "127.0.0.1:4180:4180"
+    volumes:
+      - ${OAUTH2_PROXY_ALLOWED_EMAILS_FILE:-./runtime/secrets/oauth2-allowed-emails}:/etc/oauth2-proxy/allowed-emails:ro
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL

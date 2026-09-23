@@ -125,17 +125,19 @@ Browser-Verbindung und Proxy-WebSocket-Unterstützung kontrollieren. Keine
 öffentlichen Ports als Fehlerbehebung öffnen. Healthchecks lösen weder
 Rechnungsverarbeitung noch OpenAI-Aufrufe aus.
 
-## Optionales öffentliches HTTPS
+## Öffentlicher Caddy-Zugang (Sprint 043)
 
-Nur nach gesonderter Freigabe: ein Reverse Proxy auf öffentlichem TCP 443 mit
-zusätzlicher Authentifizierung vor **allen** UI-Routen, Assets und WebSockets.
-TLS-Zertifikate und Authentifizierungs-Secrets verbleiben außerhalb des
-Repositorys. Ohne Anmeldung darf keine UI-Antwort durchgereicht werden;
-Authentifizierungsausfall muss den Zugriff sperren. Ziel bleibt die
-Loopback-UI, die API bleibt intern. Port 80, 8080 und 8081 werden dafür nicht
-geöffnet. Zertifikatsbereitstellung ohne öffentlichen Port 80 planen.
-Adress-/Portkonflikte mit Serve vorher prüfen. Dies ist keine mitgelieferte oder
-automatisch aktivierte Betriebsart; Funnel ersetzt diesen Proxy nicht.
+Für `invoice.mynet-online.de` ist ein optionales Host-Caddy-Site-Fragment mit
+Google OAuth2 Proxy im Compose-Profil `public` vorhanden. Caddy nutzt öffentlich
+80/443 für HTTPS und Zertifikatsausstellung; API, UI und OAuth2 Proxy bleiben
+auf Loopback. Alle UI-Routen einschließlich Upload und Vaadin-WebSockets laufen
+über `forward_auth`; die API hat keine öffentliche Route. Einrichtung,
+Allowlist, Abnahme und Rollback: [Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
+Vor Aktivierung einen möglichen Port-443-Konflikt mit Tailscale Serve prüfen.
+Tailscale-SSH bleibt bestehen. Ein direkter privater UI-Zugang über Serve oder
+SSH-Tunnel umgeht Google OAuth und erfordert restriktive Tailnet-Grants/ACLs.
+Funnel bleibt deaktiviert. Die bisherige private Konfiguration wird auf dem
+VPS nicht automatisch verändert.
 
 ## Rollback
 

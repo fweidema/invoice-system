@@ -4,6 +4,7 @@ import copy
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import unittest
 
@@ -15,13 +16,14 @@ def contains_application_port(value):
     parts = str(value).split('-')
     if not all(part.isdigit() for part in parts):
         return False
-    return any(int(parts[0]) <= port <= int(parts[-1]) for port in (8080, 8081))
+    return any(int(parts[0]) <= port <= int(parts[-1]) for port in (8080, 8081, 4180))
 
 
 def validate(config):
     """Require explicit IPv4 loopback for published application services and ports."""
     services = config['services']
-    for name, target in [('invoice-worker-api', 8080), ('invoice-worker-ui', 8081)]:
+    for name, target in [('invoice-worker-api', 8080), ('invoice-worker-ui', 8081),
+                         ('invoice-oauth2-proxy', 4180)]:
         service = services[name]
         if not any(port.get('target') == target for port in service.get('ports', [])):
             raise ValueError(f'{name}: expected application port missing')
@@ -29,7 +31,8 @@ def validate(config):
         if service.get('network_mode') == 'host':
             raise ValueError(f'{name}: host networking bypasses port restrictions')
         for port in service.get('ports', []):
-            protected = name in ('invoice-worker-api', 'invoice-worker-ui')
+            protected = name in ('invoice-worker-api', 'invoice-worker-ui',
+                                 'invoice-oauth2-proxy')
             protected |= contains_application_port(port.get('target'))
             protected |= contains_application_port(port.get('published'))
             if protected and port.get('host_ip') != '127.0.0.1':
@@ -43,9 +46,14 @@ def compose_config(api_port='8080', ui_port='8081'):
     # Ignore local .env and environment overrides for reproducible repository tests.
     environment = {'PATH': os.environ['PATH'], 'HOME': os.environ['HOME'],
                    'INVOICE_API_PORT': api_port, 'INVOICE_UI_PORT': ui_port}
+    docker = shutil.which('docker')
+    docker_works = docker and subprocess.run(
+        [docker, 'compose', 'version'], env=environment,
+        capture_output=True, check=False).returncode == 0
+    compose_command = [docker, 'compose'] if docker_works else ['docker-compose']
     result = subprocess.run(
-        ['docker', 'compose', '--env-file', '/dev/null', '-f', str(ROOT / 'compose.yaml'),
-         '--profile', 'ui', 'config', '--format', 'json'],
+        compose_command + ['--env-file', '/dev/null', '-f', str(ROOT / 'compose.yaml'),
+         '--profile', 'ui', '--profile', 'public', 'config', '--format', 'json'],
         cwd=ROOT, env=environment, check=True, capture_output=True, text=True)
     return json.loads(result.stdout)
 
@@ -61,8 +69,9 @@ class ComposePortSecurityTest(unittest.TestCase):
     def test_custom_host_ports_remain_loopback_only(self):
         validate(compose_config('18080', '18081'))
 
-    def test_unsafe_bindings_are_rejected_for_both_services(self):
-        for service in ('invoice-worker-api', 'invoice-worker-ui'):
+    def test_unsafe_bindings_are_rejected_for_all_three_services(self):
+        for service in ('invoice-worker-api', 'invoice-worker-ui',
+                        'invoice-oauth2-proxy'):
             for address in (None, '', '0.0.0.0', '::', '::1', '192.0.2.10'):
                 with self.subTest(service=service, address=address):
                     config = copy.deepcopy(self.config)
@@ -78,6 +87,8 @@ class ComposePortSecurityTest(unittest.TestCase):
                      {'target': 8081, 'published': '18081'},
                      {'target': 9000, 'published': '8080'},
                      {'target': 9000, 'published': '8081'},
+                     {'target': 4180, 'published': '14180'},
+                     {'target': 9000, 'published': '4180'},
                      {'target': 9000, 'published': '8000-9000'}):
             with self.subTest(port=port):
                 config = copy.deepcopy(self.config)

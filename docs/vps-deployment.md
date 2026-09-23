@@ -31,8 +31,12 @@ Tailscale Serve zur UI verwenden; die API bleibt im Compose-Netz unter
 `http://invoice-worker-api:8080/`. Öffentliche Ports 8080/8081 und Funnel sind
 nicht vorgesehen. Einrichtung, ACL-Abnahme, Betrieb und sicherer Rollback
 sind verbindlich in [vps-access-security.md](vps-access-security.md) beschrieben.
-Öffentliches HTTPS ist nur über einen zusätzlich authentifizierenden Reverse
-Proxy auf Port 443 zulässig. Tailscale-Installation, Anmeldung und Änderungen
+Für öffentliches HTTPS ist das optionale Compose-Profil `public` mit OAuth2 Proxy
+und einem Site-Block für den vorhandenen Host-Caddy vorbereitet. Caddy benötigt
+80/443, OAuth2 Proxy bindet nur `127.0.0.1:4180`, und die API erhält keine
+öffentliche Route. Einrichtung, Secrets, manuelle Abnahme und Rollback stehen in
+[Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
+Tailscale-Installation, Anmeldung und Änderungen
 auf dem VPS bleiben manuell. Vor dem Rollout lokal
 `bash deploy/tests/compose-port-security-test.sh` ausführen (Python 3 und Compose).
 Auch bei einem Code-Rollback müssen die Loopback-Bindungen erhalten bleiben.
