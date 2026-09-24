@@ -114,6 +114,12 @@ für Filter, Upload und Verarbeitung. Zielgerichtete Modul-, Persistenz-,
 API- und Vaadin-Tests, `git diff --check` und `./mvnw clean verify` sind
 auszuführen. UI lokal starten und prüfen, falls die Umgebung es erlaubt.
 
+Ergaenzend pruefen Playwright-End-to-End-Tests den echten Browserpfad fuer
+Dialogabbruch, erfolgreiche Loeschung mit Reload und eine vom Backend
+abgelehnte Loeschung. Die Tests verwenden eine lokale Fake-API und temporaere
+Verzeichnisse und laufen ueber `./scripts/dev-ui-e2e-test.sh` beziehungsweise
+das Maven-Profil `ui-e2e`.
+
 ## VCS-Vorgaben
 
 Nur `feature/sprint-044-cockpit-delete-documents`; fremde Änderungen

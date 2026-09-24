@@ -39,6 +39,7 @@ Weitere Details stehen in [docs/architecture-overview.md](docs/architecture-over
 
 - Java 21
 - Maven Wrapper aus dem Repository (`mvnw` / `mvnw.cmd`)
+- Optional fuer Browser-End-to-End-Tests: Chromium; das Testskript installiert die passende Playwright-Version
 - Optional fuer echte OCR: ein installiertes OCR-Kommando, standardmaessig `ocrmypdf`
 - Für OpenAI müssen Provider `openai` und Umgebungsvariable `OPENAI_API_KEY` gesetzt sein; ein Schlüssel allein aktiviert den Provider nicht
 
@@ -58,6 +59,14 @@ Unter Bash:
 
 Der normale Build benoetigt keinen OpenAI-Key und verursacht keine API-Kosten.
 
+Die Browser-End-to-End-Tests verwenden eine lokale Fake-API, temporaere Verzeichnisse
+und keine produktiven Rechnungsdaten. Sie werden bewusst ueber das Profil `ui-e2e`
+ausgefuehrt, weil Playwright eine passende Chromium-Binaerdatei benoetigt:
+
+```bash
+./scripts/dev-ui-e2e-test.sh
+```
+
 ## Entwicklerbefehle
 
 Alle Skripte werden aus dem Repository-Root gestartet und verwenden robuste relative Pfade. Fuer Bash-Aufrufe muss Java 21 in derselben Shell ueber `PATH` oder `JAVA_HOME` verfuegbar sein; unter Windows PowerShell kann alternativ der Maven Wrapper `mvnw.cmd` direkt genutzt werden.
@@ -67,6 +76,7 @@ Alle Skripte werden aus dem Repository-Root gestartet und verwenden robuste rela
 ./scripts/dev-test.sh               # alle Tests
 ./scripts/dev-test.sh invoice-worker
 ./scripts/dev-test.sh ReadOnlyApiServerTest
+./scripts/dev-ui-e2e-test.sh         # isolierte Playwright-Tests fuer das Vaadin-Cockpit
 ./scripts/dev-doctor.sh             # lokale Diagnose ohne Secret-Ausgabe
 ./scripts/dev-start.sh api          # API-Profil starten und /api/health pruefen
 ./scripts/dev-start.sh watch        # Watch-Service starten

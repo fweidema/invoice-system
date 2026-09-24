@@ -138,6 +138,7 @@ public final class CockpitView extends VerticalLayout {
         setWidthFull();
         setMaxWidth("1600px");
         setPadding(true);
+        deleteMessage.getElement().setAttribute("data-testid", "cockpit-delete-message");
         List.of(invoiceSearch, supplier, invoiceNumber, historySearch)
                 .forEach(field -> field.setClearButtonVisible(true));
         historyStatus.setItemLabelGenerator(value -> value.isBlank() ? "Alle" : value);
@@ -285,15 +286,18 @@ public final class CockpitView extends VerticalLayout {
         dialog.setCancelable(true);
         dialog.setConfirmText("Endgültig löschen");
         dialog.setConfirmButtonTheme("error primary");
-        dialog.addCancelListener(event -> deleteDialogOpen = false);
+        dialog.addCancelListener(event -> {
+            deleteDialogOpen = false;
+            remove(dialog);
+        });
         dialog.addConfirmListener(event -> {
             deleteDialogOpen = false;
+            remove(dialog);
             deleteDocument(documentId);
         });
         dialog.addOpenedChangeListener(event -> {
             if (!event.isOpened()) {
                 deleteDialogOpen = false;
-                remove(dialog);
             }
         });
         add(dialog);
