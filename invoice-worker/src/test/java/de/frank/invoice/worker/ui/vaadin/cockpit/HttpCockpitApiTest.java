@@ -86,6 +86,17 @@ class HttpCockpitApiTest {
                 .hasMessage("Cockpit-Daten konnten nicht geladen werden.");
     }
 
+    @Test
+    void deleteUsesInternalDocumentRouteAndMapsParallelDeletion() {
+        server.createContext("/api/documents", exchange -> {
+            assertThat(exchange.getRequestMethod()).isEqualTo("DELETE");
+            assertThat(exchange.getRequestURI().getPath()).isEqualTo("/api/documents/doc-1");
+            respond(exchange, 404, "{}");
+        });
+
+        assertThat(api.deleteDocument("doc-1")).isEqualTo(CockpitApi.DeleteResult.NOT_FOUND);
+    }
+
     private static void respond(final HttpExchange exchange, final int status, final String body)
             throws IOException {
         final byte[] content = body.getBytes(StandardCharsets.UTF_8);

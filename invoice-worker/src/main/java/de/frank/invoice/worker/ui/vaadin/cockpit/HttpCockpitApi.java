@@ -21,7 +21,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * HTTP adapter for the read-only invoice and processing-history endpoints.
+ * HTTP adapter for internal cockpit endpoints.
  */
 public final class HttpCockpitApi implements CockpitApi {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
@@ -73,6 +73,26 @@ public final class HttpCockpitApi implements CockpitApi {
     @Override
     public Processing processing(final String documentId) {
         return get("api/processing-history/" + encode(documentId), mapper.constructType(Processing.class));
+    }
+
+    @Override
+    public DeleteResult deleteDocument(final String documentId) {
+        final HttpRequest request = HttpRequest.newBuilder(baseUri.resolve("api/documents/" + encode(documentId)))
+                .timeout(REQUEST_TIMEOUT).DELETE().build();
+        try {
+            final HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+            return switch (response.statusCode()) {
+                case 200 -> DeleteResult.DELETED;
+                case 202 -> DeleteResult.CLEANUP_PENDING;
+                case 404 -> DeleteResult.NOT_FOUND;
+                default -> throw new CockpitApiException("Dokument konnte nicht gelöscht werden.", null);
+            };
+        } catch (IOException exception) {
+            throw new CockpitApiException("Dokument konnte nicht gelöscht werden.", exception);
+        } catch (InterruptedException exception) {
+            Thread.currentThread().interrupt();
+            throw new CockpitApiException("Dokument konnte nicht gelöscht werden.", exception);
+        }
     }
 
     private JavaType pageType(final Class<?> itemType) {

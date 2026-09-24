@@ -6,7 +6,7 @@ import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Processing;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Query;
 
 /**
- * Read-only boundary to the existing monitoring endpoints.
+ * Boundary to the internal cockpit endpoints.
  */
 public interface CockpitApi {
     /** Returns whether the internal API reports UP. */
@@ -23,4 +23,14 @@ public interface CockpitApi {
 
     /** Reads a processing entry by document ID. */
     Processing processing(String documentId);
+
+    /** Deletes one document aggregate by its stable ID. */
+    default DeleteResult deleteDocument(final String documentId) {
+        throw new UnsupportedOperationException("Document deletion is not configured");
+    }
+
+    /** Outcome of a single confirmed deletion. */
+    enum DeleteResult {
+        DELETED, NOT_FOUND, CLEANUP_PENDING
+    }
 }

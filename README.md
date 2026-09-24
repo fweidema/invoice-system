@@ -109,7 +109,7 @@ Beim Start zeigt die CLI Provider, Modell, Input, Archiv und Datenbank an. Waehr
 
 ## REST-API und Cockpit
 
-Das Kommando `serve` startet den eingebetteten Java-HTTP-Server. Die API ist ausschliesslich lesend und liefert gespeicherte Rechnungen, Processing History und Health-Daten. Die bisherige statische Monitoring-Seite wird dort aus Kompatibilitaetsgruenden weiterhin intern ausgeliefert. Das Cockpit ist jetzt als native View unter `/cockpit` in die Vaadin-GUI auf Port 8081 integriert und ueber deren Navigation erreichbar.
+Das Kommando `serve` startet den eingebetteten Java-HTTP-Server. Die Monitoring-Endpunkte liefern gespeicherte Rechnungen, Processing History und Health-Daten lesend; interne Mutationen für Manual Review und die bestätigte Einzeldokument-Löschung sind gesondert verfügbar. Die bisherige statische Monitoring-Seite wird aus Kompatibilitaetsgruenden weiterhin intern ausgeliefert. Das Cockpit ist als native View unter `/cockpit` in die Vaadin-GUI auf Port 8081 integriert und ueber deren Navigation erreichbar.
 
 ```text
 http://localhost:8080/
@@ -126,7 +126,7 @@ GET /api/processing-history?page=0&size=25&sort=startedAt&direction=DESC&q=&stat
 GET /api/processing-history/{documentId}
 ```
 
-Die Listen-Endpunkte liefern ein Page-Objekt mit `items`, `page`, `size`, `totalElements`, `totalPages`, `sort` und `direction`. Filterwerte werden serverseitig in SQLite angewendet; Sortierfelder sind fest validiert. Die Vaadin-View aktualisiert Daten bei Bedarf und alle 60 Sekunden, bietet Filter, Seitengroessen von 10, 25, 50 und 100, Seitennavigation und Detailansichten. Sie bleibt rein lesend. [Bedienung und Datenfluss](docs/cockpit.md).
+Die Listen-Endpunkte liefern ein Page-Objekt mit `items`, `page`, `size`, `totalElements`, `totalPages`, `sort` und `direction`. Filterwerte werden serverseitig in SQLite angewendet; Sortierfelder sind fest validiert. Die Vaadin-View aktualisiert Daten bei Bedarf und alle 60 Sekunden, bietet Filter, Seitengroessen von 10, 25, 50 und 100, Seitennavigation und Detailansichten. Ein einzelnes Dokument kann nach expliziter Bestätigung über die interne API gelöscht werden; es gibt kein Bulk-Löschen und keine öffentliche API-Route. [Bedienung und Datenfluss](docs/cockpit.md).
 
 ## Rechnungsdatenexport
 

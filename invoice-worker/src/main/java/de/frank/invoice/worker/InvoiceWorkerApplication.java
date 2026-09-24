@@ -23,6 +23,8 @@ import de.frank.invoice.worker.infrastructure.archive.FileSystemArchiveService;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteInvoiceRepository;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingEventRepository;
+import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteDocumentDeletionGateway;
+import de.frank.invoice.worker.application.deletion.DocumentDeletionService;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingHistoryRepository;
 import de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteProcessingStateRepository;
 import de.frank.invoice.worker.infrastructure.watch.NioDirectoryWatcher;
@@ -195,7 +197,16 @@ public class InvoiceWorkerApplication {
                 apiConfiguration,
                 invoiceRepository,
                 historyRepository,
-                manualReviewService);
+                manualReviewService,
+                new DocumentDeletionService(new SQLiteDocumentDeletionGateway(
+                        configuration.persistence().databaseFile(),
+                        List.of(configuration.batch().inputDirectory(), configuration.watch().directory(),
+                                configuration.processing().workDirectory(),
+                                configuration.processing().manualReviewDirectory(),
+                                configuration.processing().errorDirectory(),
+                                configuration.archive().archiveDirectory(),
+                                configuration.ocr().outputDirectory()),
+                        configuration.processing().workDirectory())));
         Runtime.getRuntime().addShutdownHook(new Thread(apiServer::requestShutdown, "invoice-api-shutdown"));
         out.println("Invoice Worker API gestartet");
         out.println("Profil: " + options.profile().profileName());

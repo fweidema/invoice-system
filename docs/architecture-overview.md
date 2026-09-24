@@ -145,6 +145,12 @@ und alle 60 Sekunden. Die frühere statische `/dashboard`-Auslieferung auf
 dem API-Server bleibt intern für Kompatibilität erhalten, wird von Vaadin
 aber nicht verwendet. [Bedienung und Grenzen](cockpit.md).
 
+Für bestätigte Einzeldokument-Löschungen nutzt die View denselben Port und
+eine ausschließlich interne DELETE-Route. `DocumentDeletionService` und
+`SQLiteDocumentDeletionGateway` koordinieren Datenbanktransaktion, geprüfte
+Runtime-Dateien und Fehlerreaktion. Die öffentliche Caddy-Konfiguration
+erhält keine API-Route. [Sprint 044](codex-tasks/044-cockpit-delete-documents.md).
+
 ## Rechnungsupload
 
 ```text

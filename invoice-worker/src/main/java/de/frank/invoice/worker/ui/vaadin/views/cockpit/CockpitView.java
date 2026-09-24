@@ -4,12 +4,14 @@ import com.vaadin.flow.component.AttachEvent;
 import com.vaadin.flow.component.DetachEvent;
 import com.vaadin.flow.component.UI;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import com.vaadin.flow.component.datepicker.DatePicker;
 import com.vaadin.flow.component.formlayout.FormLayout;
 import com.vaadin.flow.component.grid.Grid;
 import com.vaadin.flow.component.html.H2;
 import com.vaadin.flow.component.html.H3;
 import com.vaadin.flow.component.html.Span;
+import com.vaadin.flow.component.icon.VaadinIcon;
 import com.vaadin.flow.component.orderedlayout.HorizontalLayout;
 import com.vaadin.flow.component.orderedlayout.VerticalLayout;
 import com.vaadin.flow.component.progressbar.ProgressBar;
@@ -82,6 +84,7 @@ public final class CockpitView extends VerticalLayout {
     private final Span invoiceMessage = message();
     private final Span historyMessage = message();
     private final Span detailMessage = message();
+    private final Span deleteMessage = message();
     private final ProgressBar invoiceLoading = loading();
     private final ProgressBar historyLoading = loading();
     private final Span invoicePageLabel = new Span();
@@ -103,6 +106,8 @@ public final class CockpitView extends VerticalLayout {
     private int historyRequest;
     private int detailRequest;
     private Registration pollRegistration;
+    private boolean deleting;
+    private boolean deleteDialogOpen;
 
     /**
      * Creates the routed view from the API boundary stored in the Vaadin session.
@@ -155,7 +160,7 @@ public final class CockpitView extends VerticalLayout {
         detail.setWidthFull();
         showDetail("Wähle eine Tabellenzeile aus.", List.of());
         showMessage(detailMessage, "Wähle eine Tabellenzeile aus.", false);
-        add(new H2("Cockpit"), summary,
+        add(new H2("Cockpit"), summary, deleteMessage,
                 section("Letzte Verarbeitungen", historyFilters(), historyLoading, historyMessage,
                         historyGrid, pager(historyFirst, historyPrevious, historyPageLabel, historyNext, historyLast)),
                 section("Rechnungen", invoiceFilters(), invoiceLoading, invoiceMessage,
@@ -221,6 +226,7 @@ public final class CockpitView extends VerticalLayout {
         historyGrid.addComponentColumn(item -> statusBadge(item.status())).setHeader("Status");
         historyGrid.addColumn(item -> text(item.invoiceNumber())).setHeader("Rechnungsnummer");
         historyGrid.addColumn(item -> item.durationMillis() + " ms").setHeader("Dauer");
+        historyGrid.addComponentColumn(item -> deleteButton(item.documentId())).setHeader("Aktion");
         historyGrid.getColumns().forEach(column -> column.setAutoWidth(true).setFlexGrow(0));
         historyGrid.addSelectionListener(event -> event.getFirstSelectedItem().ifPresent(this::selectProcessing));
         historyGrid.setHeight("320px");
@@ -233,6 +239,7 @@ public final class CockpitView extends VerticalLayout {
         invoiceGrid.addColumn(item -> text(item.invoiceNumber())).setHeader("Rechnungsnummer");
         invoiceGrid.addColumn(item -> money(item.grossAmount())).setHeader("Betrag");
         invoiceGrid.addColumn(item -> "Rechnung").setHeader("Dokumenttyp");
+        invoiceGrid.addComponentColumn(item -> deleteButton(item.documentId())).setHeader("Aktion");
         invoiceGrid.getColumns().forEach(column -> column.setAutoWidth(true).setFlexGrow(0));
         invoiceGrid.addSelectionListener(event -> event.getFirstSelectedItem().ifPresent(this::selectInvoice));
         invoiceGrid.setHeight("320px");
@@ -250,6 +257,68 @@ public final class CockpitView extends VerticalLayout {
         }, error -> health.setText("API nicht erreichbar"));
         loadInvoices(false);
         loadHistory(false);
+    }
+
+    private Button deleteButton(final String documentId) {
+        final Button button = new Button(VaadinIcon.TRASH.create());
+        button.setTooltipText("Dokument endgültig löschen");
+        button.setAriaLabel("Dokument " + documentId + " löschen");
+        button.getElement().setAttribute("data-testid", "cockpit-delete");
+        button.addClickListener(event -> confirmDeletion(documentId));
+        return button;
+    }
+
+    void confirmDeletion(final String documentId) {
+        if (deleting || deleteDialogOpen) {
+            return;
+        }
+        deleteDialogOpen = true;
+        final ConfirmDialog dialog = new ConfirmDialog();
+        dialog.setHeader("Dokument endgültig löschen?");
+        dialog.setText("Dokumentkennung: " + documentId
+                + ". Datensatz und eindeutig zugeordnete Dateien werden endgültig gelöscht.");
+        dialog.setCancelText("Abbrechen");
+        dialog.setCancelable(true);
+        dialog.setConfirmText("Endgültig löschen");
+        dialog.setConfirmButtonTheme("error primary");
+        dialog.addCancelListener(event -> deleteDialogOpen = false);
+        dialog.addConfirmListener(event -> {
+            deleteDialogOpen = false;
+            deleteDocument(documentId);
+        });
+        dialog.addOpenedChangeListener(event -> {
+            if (!event.isOpened()) {
+                deleteDialogOpen = false;
+                remove(dialog);
+            }
+        });
+        add(dialog);
+        if (UI.getCurrent() != null) {
+            dialog.open();
+        }
+    }
+
+    private void deleteDocument(final String documentId) {
+        if (deleting) {
+            return;
+        }
+        deleting = true;
+        showMessage(deleteMessage, "Dokument wird gelöscht …", false);
+        run(() -> api.deleteDocument(documentId), result -> {
+            deleting = false;
+            final String text = switch (result) {
+                case DELETED -> "Dokument wurde gelöscht.";
+                case NOT_FOUND -> "Dokument wurde bereits gelöscht.";
+                case CLEANUP_PENDING -> "Datensatz gelöscht; Dateibereinigung muss geprüft werden.";
+            };
+            showMessage(deleteMessage, text, result == CockpitApi.DeleteResult.CLEANUP_PENDING);
+            ++detailRequest;
+            showDetail("Wähle eine Tabellenzeile aus.", List.of());
+            refreshAll();
+        }, error -> {
+            deleting = false;
+            showMessage(deleteMessage, "Dokument konnte nicht gelöscht werden. Daten bitte prüfen.", true);
+        });
     }
 
     private void invoicePage(final int requestedPage) {
@@ -565,6 +634,10 @@ public final class CockpitView extends VerticalLayout {
 
     Span historyMessage() {
         return historyMessage;
+    }
+
+    Span deleteMessage() {
+        return deleteMessage;
     }
 
     VerticalLayout detail() {

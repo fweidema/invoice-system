@@ -2,6 +2,8 @@ package de.frank.invoice.worker.ui.vaadin.views.cockpit;
 
 import com.vaadin.flow.component.Component;
 import com.vaadin.flow.component.button.Button;
+import com.vaadin.flow.component.ComponentUtil;
+import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitApi;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Invoice;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Money;
@@ -79,6 +81,57 @@ class CockpitViewTest {
                 .map(element -> element.getText())).anyMatch(text -> text.contains("Kundennummer: K-1"));
     }
 
+    @Test
+    void cancelDialogDoesNotDeleteDocument() {
+        final FakeApi api = new FakeApi();
+        final CockpitView view = new CockpitView(api, Runnable::run);
+        view.confirmDeletion("doc-1");
+        final ConfirmDialog dialog = view.getChildren().filter(ConfirmDialog.class::isInstance)
+                .map(ConfirmDialog.class::cast).findFirst().orElseThrow();
+
+        ComponentUtil.fireEvent(dialog, new ConfirmDialog.CancelEvent(dialog, false));
+        dialog.close();
+
+        assertThat(api.deleted).isFalse();
+        assertThat(view.invoiceGrid().getListDataView().getItems()).containsExactly(INVOICE);
+    }
+
+    @Test
+    void confirmedDeletionRefreshesListsAndEmptyState() {
+        final FakeApi api = new FakeApi();
+        final CockpitView view = new CockpitView(api, Runnable::run);
+        view.confirmDeletion("doc-1");
+        final ConfirmDialog dialog = view.getChildren().filter(ConfirmDialog.class::isInstance)
+                .map(ConfirmDialog.class::cast).findFirst().orElseThrow();
+
+        ComponentUtil.fireEvent(dialog, new ConfirmDialog.ConfirmEvent(dialog, false));
+
+        assertThat(api.deleted).isTrue();
+        assertThat(view.invoiceGrid().getListDataView().getItems()).isEmpty();
+        assertThat(view.historyGrid().getListDataView().getItems()).isEmpty();
+        assertThat(view.deleteMessage().getText()).contains("gelöscht");
+    }
+
+    @Test
+    void confirmedDeletionKeepsFiltersAndCorrectsEmptyPagingPosition() {
+        final FakeApi api = new FakeApi();
+        api.paged = true;
+        final CockpitView view = new CockpitView(api, Runnable::run);
+        view.invoiceSearch().setValue("ACME");
+        findButton(view, "Filter anwenden", 1).click();
+        findButton(view, "Weiter", 1).click();
+        view.confirmDeletion("doc-1");
+        final ConfirmDialog dialog = view.getChildren().filter(ConfirmDialog.class::isInstance)
+                .map(ConfirmDialog.class::cast).findFirst().orElseThrow();
+
+        ComponentUtil.fireEvent(dialog, new ConfirmDialog.ConfirmEvent(dialog, false));
+        findButton(view, "Jetzt aktualisieren", 0).click();
+
+        assertThat(api.invoiceQuery.page()).isZero();
+        assertThat(api.invoiceQuery.search()).isEqualTo("ACME");
+        assertThat(view.invoiceGrid().getListDataView().getItems()).isEmpty();
+    }
+
     private static Button findButton(final Component root, final String label, final int occurrence) {
         return descendants(root).filter(Button.class::isInstance).map(Button.class::cast)
                 .filter(button -> label.equals(button.getText())).skip(occurrence).findFirst().orElseThrow();
@@ -95,6 +148,7 @@ class CockpitViewTest {
         private boolean empty;
         private boolean paged;
         private boolean invoiceDetailRead;
+        private boolean deleted;
 
         @Override
         public boolean healthy() {
@@ -128,6 +182,13 @@ class CockpitViewTest {
         @Override
         public Processing processing(final String documentId) {
             return HISTORY;
+        }
+
+        @Override
+        public DeleteResult deleteDocument(final String documentId) {
+            deleted = true;
+            empty = true;
+            return DeleteResult.DELETED;
         }
     }
 }

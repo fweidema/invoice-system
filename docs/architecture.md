@@ -98,10 +98,17 @@ Google umgehen und ist für normale Tailnet-Clients gesperrt.
 
 ## Vaadin-Cockpit
 
-Die neue Route `/cockpit` gehört zur vorhandenen Vaadin-Navigation. Ihr
+Die Route `/cockpit` gehört zur vorhandenen Vaadin-Navigation. Ihr
 `CockpitApi`-Port liest über `HttpCockpitApi` dieselben internen REST-Endpunkte
 für Health, Rechnungen und Processing History wie das bisherige Dashboard.
 Der API-Server wendet Filter und Pagination weiterhin in SQLite an; die
 UI-Session speichert keine produktiven Daten dauerhaft. Die frühere statische
 Seite bleibt intern ausgeliefert, ist aber keine Abhängigkeit der Vaadin-View.
 [Bedienung, Datenfluss und Grenzen](cockpit.md).
+
+Einzeldokument-Löschungen laufen über die interne DELETE-Route, den
+`DocumentDeletionService` und `SQLiteDocumentDeletionGateway`. `document_id`
+verbindet Rechnungen, Historie und Verarbeitungszustand; Dateipfade werden
+ausschließlich aus diesen Zeilen und konfigurierten Runtime-Wurzeln ermittelt.
+Die Datenbanklöschung ist transaktional und Dateiverschiebungen werden bei
+Fehlern vor Commit zurückgestellt. [Sicherheits- und Fehlerstrategie](codex-tasks/044-cockpit-delete-documents.md).

@@ -9,6 +9,9 @@ import de.frank.invoice.worker.application.persistence.InvoiceRepository;
 import de.frank.invoice.worker.application.persistence.InvoiceSearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistorySearchCriteria;
 import de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository;
+import de.frank.invoice.worker.application.deletion.DocumentDeletionService;
+import de.frank.invoice.worker.application.deletion.DocumentDeletionException;
+import de.frank.invoice.worker.application.deletion.DocumentDeletionGateway.DeleteResult;
 import de.frank.invoice.worker.application.persistence.SortDirection;
 import de.frank.invoice.worker.application.manualreview.InvoiceCorrection;
 import de.frank.invoice.worker.application.manualreview.ManualReviewException;
@@ -40,7 +43,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Small read-only HTTP API backed by the repository ports.
+ * Small monitoring API with isolated internal mutation endpoints.
  */
 public class ReadOnlyApiServer implements AutoCloseable {
 
@@ -53,6 +56,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
     private static final String PATH_INVOICES = "/api/invoices";
     private static final String PATH_HISTORY = "/api/processing-history";
     private static final String PATH_MANUAL_REVIEW = "/api/manual-review";
+    private static final String PATH_DOCUMENTS = "/api/documents";
     private static final int HTTP_OK = 200;
     private static final int HTTP_BAD_REQUEST = 400;
     private static final int HTTP_NOT_FOUND = 404;
@@ -66,6 +70,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
     private final ProcessingHistoryRepository processingHistoryRepository;
     private final ObjectMapper objectMapper;
     private final ManualReviewService manualReviewService;
+    private final DocumentDeletionService deletionService;
     private final CountDownLatch stopped = new CountDownLatch(1);
     private HttpServer server;
     private ExecutorService executorService;
@@ -109,6 +114,28 @@ public class ReadOnlyApiServer implements AutoCloseable {
             final ProcessingHistoryRepository processingHistoryRepository,
             final ManualReviewService manualReviewService,
             final ObjectMapper objectMapper) {
+        this(configuration, invoiceRepository, processingHistoryRepository,
+                manualReviewService, null, objectMapper);
+    }
+
+    /** Creates an API server with internal manual-review and document-deletion use cases. */
+    public ReadOnlyApiServer(
+            final ApiConfiguration configuration,
+            final InvoiceRepository invoiceRepository,
+            final ProcessingHistoryRepository processingHistoryRepository,
+            final ManualReviewService manualReviewService,
+            final DocumentDeletionService deletionService) {
+        this(configuration, invoiceRepository, processingHistoryRepository,
+                manualReviewService, deletionService, new ObjectMapper());
+    }
+
+    ReadOnlyApiServer(
+            final ApiConfiguration configuration,
+            final InvoiceRepository invoiceRepository,
+            final ProcessingHistoryRepository processingHistoryRepository,
+            final ManualReviewService manualReviewService,
+            final DocumentDeletionService deletionService,
+            final ObjectMapper objectMapper) {
         this.configuration = Objects.requireNonNull(configuration, "configuration must not be null");
         this.invoiceRepository = Objects.requireNonNull(invoiceRepository, "invoiceRepository must not be null");
         this.processingHistoryRepository = Objects.requireNonNull(
@@ -116,6 +143,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
                 "processingHistoryRepository must not be null");
         this.objectMapper = Objects.requireNonNull(objectMapper, "objectMapper must not be null");
         this.manualReviewService = manualReviewService;
+        this.deletionService = deletionService;
     }
 
     /**
@@ -154,6 +182,9 @@ public class ReadOnlyApiServer implements AutoCloseable {
         server.createContext(PATH_HISTORY, exchange -> handle(exchange, this::handleProcessingHistory));
         if (manualReviewService != null) {
             server.createContext(PATH_MANUAL_REVIEW, exchange -> handle(exchange, this::handleManualReview));
+        }
+        if (deletionService != null) {
+            server.createContext(PATH_DOCUMENTS, exchange -> handle(exchange, this::handleDocumentDeletion));
         }
         server.createContext("/", exchange -> handle(exchange, this::handleStaticResource));
         executorService = Executors.newCachedThreadPool();
@@ -312,6 +343,41 @@ public class ReadOnlyApiServer implements AutoCloseable {
             return;
         }
         writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+    }
+
+    private void handleDocumentDeletion(final HttpExchange exchange) throws IOException {
+        if (!"DELETE".equals(exchange.getRequestMethod())) {
+            methodNotAllowed(exchange, "DELETE");
+            return;
+        }
+        final String path = exchange.getRequestURI().getPath();
+        if (!path.startsWith(PATH_DOCUMENTS + "/")) {
+            writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+            return;
+        }
+        final String documentId = decode(path.substring((PATH_DOCUMENTS + "/").length()));
+        if (documentId.contains("/") || documentId.isBlank()) {
+            writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+            return;
+        }
+        try {
+            final DeleteResult result = deletionService.delete(documentId);
+            switch (result) {
+                case DELETED -> writeJson(exchange, HTTP_OK, new DeletionResponse("DELETED"));
+                case NOT_FOUND -> writeError(exchange, HTTP_NOT_FOUND, "DOCUMENT_NOT_FOUND", "Document not found.");
+                case CLEANUP_PENDING -> writeJson(exchange, HTTP_ACCEPTED, new DeletionResponse("CLEANUP_PENDING"));
+            }
+        } catch (DocumentDeletionException exception) {
+            final int status = switch (exception.code()) {
+                case INVALID_ID -> HTTP_BAD_REQUEST;
+                case ACTIVE, UNSAFE_ARTIFACT -> HTTP_CONFLICT;
+                case FILE_FAILURE, DATABASE_FAILURE -> HTTP_INTERNAL_ERROR;
+            };
+            writeError(exchange, status, exception.code().name(), exception.getMessage());
+        }
+    }
+
+    private record DeletionResponse(String status) {
     }
 
     private void handleManualReview(final HttpExchange exchange) throws IOException {

@@ -44,7 +44,24 @@ ist, ersetzt `/cockpit` im öffentlichen Betrieb deren Nutzungsweg. Ein spätere
 Entfernen der statischen Auslieferung braucht eine Prüfung aller internen
 Verbraucher und eigene Regressionstests.
 
-Die View ist rein lesend. Sie zeigt keine Live-Ereignisse zwischen den
+Über das Papierkorb-Icon in einer Rechnungs- oder Verarbeitungszeile lässt sich
+das zugehörige Dokument anhand seiner stabilen Dokumentkennung löschen. Der
+Tooltip benennt die Aktion. Ein modaler Dialog nennt Kennung und Endgültigkeit;
+**Abbrechen** ändert nichts. Während der Löschung ist eine weitere Auslösung
+gesperrt. Danach aktualisieren sich beide Listen, die aktuelle Filterung und
+Sortierung bleiben erhalten und ein zu hoher Seitenindex wird korrigiert.
+Bei einem bereits parallel gelöschten Dokument erscheint ein eigener Hinweis.
+Eine Dateibereinigung, die nach dem Datenbank-Commit fehlschlägt, erscheint
+als gesonderter Warnzustand und erfordert operative Prüfung.
+
+Die Löschaktion läuft serverseitig über die interne API `/api/documents/{documentId}`
+und den `DocumentDeletionService`; der Browser erhält keine direkte API-Route.
+Nur persistierte und eindeutig zugeordnete Dateien innerhalb der konfigurierten
+Runtime-Wurzeln kommen infrage. Aktive Verarbeitungen, unsichere Pfade und
+Symlinks werden abgewiesen. Details zu Transaktion, Restdateien und
+Betriebsgrenzen stehen in [Sprint 044](codex-tasks/044-cockpit-delete-documents.md).
+
+Die View zeigt keine Live-Ereignisse zwischen den
 60-Sekunden-Aktualisierungen. Eine bereits geöffnete Detailansicht bleibt
 sichtbar, bis eine andere Zeile gewählt wird; bei einem Detailfehler erscheint
 eine Meldung. Die API-Erreichbarkeit und Datenlisten werden unabhängig
