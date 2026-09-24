@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check resolved Compose port bindings without a daemon or third-party packages."""
 import copy
+import ipaddress
 import json
 import os
 from pathlib import Path
@@ -19,8 +20,11 @@ def contains_application_port(value):
     return any(int(parts[0]) <= port <= int(parts[-1]) for port in (8080, 8081, 4180))
 
 
-def validate(config):
-    """Require explicit IPv4 loopback for published application services and ports."""
+def validate(config, tailnet_ip=None):
+    """Require API loopback and the expected UI/OAuth bind address."""
+    tailnet_range = ipaddress.ip_network('100.64.0.0/10')
+    if tailnet_ip is not None and ipaddress.ip_address(tailnet_ip) not in tailnet_range:
+        raise ValueError('UI/OAuth bind address must be in the Tailscale IPv4 range')
     services = config['services']
     for name, target in [('invoice-worker-api', 8080), ('invoice-worker-ui', 8081),
                          ('invoice-oauth2-proxy', 4180)]:
@@ -35,17 +39,22 @@ def validate(config):
                                  'invoice-oauth2-proxy')
             protected |= contains_application_port(port.get('target'))
             protected |= contains_application_port(port.get('published'))
-            if protected and port.get('host_ip') != '127.0.0.1':
-                raise ValueError(f'{name}: application port must bind to 127.0.0.1')
+            tailnet_service = name in ('invoice-worker-ui', 'invoice-oauth2-proxy')
+            expected_ip = tailnet_ip if tailnet_service and tailnet_ip else '127.0.0.1'
+            if protected and port.get('host_ip') != expected_ip:
+                raise ValueError(f'{name}: application port must bind to {expected_ip}')
     uri = services['invoice-worker-ui']['environment']['INVOICE_UI_MANUAL_REVIEW_API_BASE_URI']
     if uri != 'http://invoice-worker-api:8080/':
         raise ValueError('UI must use the internal API address')
 
 
-def compose_config(api_port='8080', ui_port='8081'):
+def compose_config(api_port='8080', ui_port='8081', tailnet_ip=None):
     # Ignore local .env and environment overrides for reproducible repository tests.
     environment = {'PATH': os.environ['PATH'], 'HOME': os.environ['HOME'],
                    'INVOICE_API_PORT': api_port, 'INVOICE_UI_PORT': ui_port}
+    if tailnet_ip:
+        environment['INVOICE_UI_BIND_ADDRESS'] = tailnet_ip
+        environment['OAUTH2_PROXY_BIND_ADDRESS'] = tailnet_ip
     docker = shutil.which('docker')
     docker_works = docker and subprocess.run(
         [docker, 'compose', 'version'], env=environment,
@@ -68,6 +77,10 @@ class ComposePortSecurityTest(unittest.TestCase):
 
     def test_custom_host_ports_remain_loopback_only(self):
         validate(compose_config('18080', '18081'))
+
+    def test_explicit_tailnet_binding_applies_only_to_ui_and_oauth(self):
+        tailnet_ip = str(ipaddress.ip_network('100.64.0.0/10').network_address + 42)
+        validate(compose_config(tailnet_ip=tailnet_ip), tailnet_ip=tailnet_ip)
 
     def test_unsafe_bindings_are_rejected_for_all_three_services(self):
         for service in ('invoice-worker-api', 'invoice-worker-ui',

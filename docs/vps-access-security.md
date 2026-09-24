@@ -1,5 +1,9 @@
 # Sicherer VPS-Zugriff über Tailscale (Sprint 041)
 
+Diese Anleitung beschreibt den früheren privaten Sprint-041-Zugang. Der
+aktuelle öffentliche Zwei-VPS-Betrieb steht unter
+[Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
+
 ## Verbindliches Zugriffsmodell
 
 API und UI werden auf dem Host ausschließlich an `127.0.0.1` veröffentlicht:
@@ -127,17 +131,16 @@ Rechnungsverarbeitung noch OpenAI-Aufrufe aus.
 
 ## Öffentlicher Caddy-Zugang (Sprint 043)
 
-Für `invoice.mynet-online.de` ist ein optionales Host-Caddy-Site-Fragment mit
-Google OAuth2 Proxy im Compose-Profil `public` vorhanden. Caddy nutzt öffentlich
-80/443 für HTTPS und Zertifikatsausstellung; API, UI und OAuth2 Proxy bleiben
-auf Loopback. Alle UI-Routen einschließlich Upload und Vaadin-WebSockets laufen
-über `forward_auth`; die API hat keine öffentliche Route. Einrichtung,
-Allowlist, Abnahme und Rollback: [Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
-Vor Aktivierung einen möglichen Port-443-Konflikt mit Tailscale Serve prüfen.
-Tailscale-SSH bleibt bestehen. Ein direkter privater UI-Zugang über Serve oder
-SSH-Tunnel umgeht Google OAuth und erfordert restriktive Tailnet-Grants/ACLs.
-Funnel bleibt deaktiviert. Die bisherige private Konfiguration wird auf dem
-VPS nicht automatisch verändert.
+Der obige Sprint-041-Betrieb beschreibt den früheren privaten Zugang. Im
+produktiven Zwei-VPS-Betrieb zeigt `invoice.mynet-online.de` auf `my-vps`.
+Dort ist Caddy allein öffentlich auf 80/443 erreichbar. Er erreicht OAuth2
+Proxy (`:4180`) und Vaadin (`:8081`) auf `vps-contabo` ausschließlich über
+Tailscale. Die beiden Ports binden auf `vps-contabo` an dessen Tailscale-IP;
+8080 bleibt auf Loopback. Alle UI-Routen laufen durch Google OAuth, die API
+hat keine öffentliche Route. Direktzugriff auf 8081 umgeht Google und muss
+für andere Tailnet-Clients per Grants/ACLs und Host-Firewall gesperrt sein.
+Der produktive Google-Login und Vaadin-Start wurden bestätigt. Kein Funnel.
+Einrichtung, Abnahme und Rollback: [Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
 
 ## Rollback
 

@@ -1,229 +1,210 @@
 # Sprint 043 – Öffentlicher Zugriff über Caddy mit Google-Anmeldung
 
-## Zielbild und Sicherheitsgrenzen
+## Tatsächlich produktiv betriebene Architektur
 
 ```text
-Internet -> HTTPS invoice.mynet-online.de -> Host-Caddy (:80/:443)
-         -> OAuth2 Proxy (127.0.0.1:4180) -> Vaadin-UI (127.0.0.1:8081)
-                                              -> interne API (Compose-Netz :8080)
-Tailnet  -> SSH/Administration; optional privater UI-Notfallzugang
+Internet / DNS invoice.mynet-online.de -> öffentliche IP von my-vps
+  -> HTTPS :443 / Caddy auf my-vps (nur my-vps veröffentlicht :80/:443)
+  -> Tailscale zu vps-contabo:
+       :4180 OAuth2 Proxy für /oauth2/* und forward_auth
+       :8081 Vaadin-UI nach erfolgreicher Authentisierung
+  -> UI -> Compose-interne API :8080 auf vps-contabo
+
+Tailscale -> SSH/Administration beider VPS; kein Funnel
 ```
 
-Nur Caddy ist öffentlich erreichbar. Compose bindet API, UI und OAuth2 Proxy
-explizit an IPv4-Loopback. Caddy hat keine direkte API-Route; die UI spricht die
-API intern an. Caddy authentifiziert alle UI-Pfade einschließlich Assets,
-Uploads und WebSocket-Handshakes. `/oauth2/*` wird direkt an OAuth2 Proxy
-weitergeleitet, damit Start und Callback erreichbar sind. Bei fehlender Sitzung
-leitet Caddy die 401-Antwort von `/oauth2/auth` zu `/oauth2/start` um. Ein
-Ausfall von OAuth2 Proxy liefert keinen Zugriff auf die UI.
+Caddy, Invoice-System und OAuth2 Proxy laufen **nicht auf demselben Host**.
+Caddy auf `my-vps` nutzt ausschließlich die Tailnet-Adressen von `vps-contabo`
+als Upstreams. Auf `vps-contabo` binden die veröffentlichten UI- und
+OAuth2-Proxy-Ports nur an dessen eigene Tailscale-IPv4-Adresse; die API bleibt
+Compose-intern und ihr Diagnoseport auf `127.0.0.1:8080`. Die öffentlichen
+Firewall-Regeln von `vps-contabo` erlauben weder 8080, 8081 noch 4180.
+DNS-A und gegebenenfalls AAAA zeigen ausschließlich auf die öffentliche IP
+von `my-vps`; nur dort sind TCP 80/443 öffentlich freigegeben. Tailscale
+Funnel wird nicht verwendet.
 
-Google authentifiziert die Identität; die lokale Datei
-`runtime/secrets/oauth2-allowed-emails` entscheidet über den Zugriff. Eine
-Zeile enthält genau eine erlaubte E-Mail-Adresse. Es ist keine Domain-Freigabe
-und kein IP-Bypass konfiguriert. Die Beispieldatei
-`deploy/oauth2/allowed-emails.example` enthält nur einen Platzhalter.
-Cookies tragen `Secure`, `HttpOnly`, `SameSite=Lax` und laufen nach acht Stunden
-ab. Der `__Host-`-Präfix bindet sie an den Host. OAuth2 Proxy läuft im
-Reverse-Proxy-Modus und vertraut weitergeleitete Header nur von der einzeln
-ermittelten Docker-Bridge-Gateway-Adresse von Host-Caddy. Der Default
-`127.0.0.1/32` ist absichtlich eng und muss auf dem VPS geprüft und meist
-angepasst werden. `trusted-proxy-ips` ist **keine** Ausnahme von der Anmeldung;
-`trusted-ips` darf nicht gesetzt werden.
+Der Aufruf von `https://invoice.mynet-online.de/` erreicht Caddy auf `my-vps`.
+`/oauth2/*` geht über Tailscale zum OAuth2 Proxy, insbesondere der Google-
+Callback `https://invoice.mynet-online.de/oauth2/callback`. Für alle anderen
+UI-Pfade fragt Caddy per `forward_auth` `/oauth2/auth` ab. Bei 401 leitet
+`redir * /oauth2/sign_in?rd={scheme}://{host}{uri}` zur Anmeldung. Nach
+Freigabe leitet Caddy die Anfrage über Tailscale an Vaadin weiter, auch
+Assets, Uploads und WebSocket-Handshakes. Es gibt keine öffentliche API-Route.
+Bei Ausfall des OAuth2 Proxy erhält die UI keine Freigabe.
 
-Der direkte private Tailscale-Serve-Zugang und ein SSH-Tunnel zur Loopback-UI
-**umgehen Google OAuth vollständig**. Nur ausdrücklich berechtigte Tailnet-
-Benutzer und Geräte dürfen diese Wege verwenden. Tailscale-Grants/ACLs für
-SSH und einen optionalen privaten UI-Port restriktiv halten und mit einem nicht
-berechtigten Gerät negativ prüfen. Kein Funnel. Vorhandene Tailscale-Serve-Routen
-und mögliche Kollisionen auf Port 443 prüfen; Caddy und Serve dürfen nicht
-gleichzeitig denselben Host-Socket beanspruchen. Für den Notfall genügt ein
-SSH-Tunnel über Tailscale.
+Der produktive Google-Login wurde erfolgreich getestet; danach war die
+Vaadin-Anwendung ausführbar. Dies ist ein dokumentiertes Betriebsergebnis und
+kein durch den lokalen Repository-Test erneut ausgeführter Google-Test.
 
-## Versionierte Konfiguration und lokale Entwicklung
+## Authentisierung und Netzgrenzen
 
-- `compose.yaml`: optionales Profil `public`, OAuth2 Proxy v7.15.4, nur
-  `127.0.0.1:4180:4180`; die bisherigen API-/UI-Bindungen bleiben Loopback.
-- `deploy/caddy/invoice.mynet-online.de.Caddyfile`: Site-Block zum Import in
-  **den bestehenden Host-Caddy**, keine zweite Caddy-Instanz. Automatisches
-  HTTPS benötigt DNS und erreichbare Ports 80/443.
-- `.env.example`: Platzhalter für Client-ID, Client-Secret, Cookie-Secret,
-  Allowlist-Pfad und vertrauenswürdige Proxy-IP. Die befüllte `.env` und
-  `runtime/` sind ignoriert. `docker compose config` kann Umgebungswerte
-  einschließlich Secrets ausgeben; Ausgabe nicht veröffentlichen.
+Google authentifiziert die Identität. Die lokale, nicht versionierte
+E-Mail-Allowlist auf `vps-contabo` erlaubt ausschließlich einzelne Adressen;
+keine Domain- oder IP-Ausnahme ist konfiguriert. Client-ID, Client-Secret,
+Cookie-Secret und Allowlist liegen auf `vps-contabo` außerhalb von Git.
+Die Google Redirect-URI lautet exakt
+`https://invoice.mynet-online.de/oauth2/callback`. Cookies sind `Secure`,
+`HttpOnly`, `SameSite=Lax`, hostgebunden und auf acht Stunden begrenzt.
 
-Lokale Entwicklung bleibt bei den bisherigen `scripts/dev-*.sh` und dem
-Mock-Provider. Das Profil `public` wird nur ausdrücklich gestartet; ohne
-Google-OAuth-Credentials ist kein erfolgreicher Login möglich. Änderungen an
-API- und UI-Ports sind hier nicht vorgesehen: Der Host-Caddy-Block erwartet
-8081, OAuth2 Proxy erwartet 4180.
+`OAUTH2_PROXY_TRUSTED_PROXY_IPS` enthält auf `vps-contabo` **ausschließlich**
+die Tailscale-IPv4-Adresse von `my-vps` als einzelne `/32`. Dies erlaubt
+Forwarded-Header dieses Proxys; es umgeht die Anmeldung nicht. Niemals
+`OAUTH2_PROXY_TRUSTED_IPS` als Auth-Bypass setzen. Der lokale Default
+`127.0.0.1/32` in `.env.example` ist für Entwicklung bestimmt und wird auf
+`vps-contabo` ersetzt.
 
-## Manuelle Einrichtung auf dem VPS
+Ein direkter Tailnet-Aufruf von `vps-contabo:8081` **umgeht Google OAuth**.
+Daher müssen Tailscale-Grants/ACLs und die Host-Firewall auf `vps-contabo`
+TCP 8081 und 4180 ausschließlich für `my-vps` zulassen; für andere
+Tailnet-Clients einschließlich normaler Benutzer wird direkter Zugriff
+verweigert. Einen nicht berechtigten Tailnet-Client negativ testen. Nur
+administrative SSH-Zugänge getrennt und restriktiv freigeben. Tailscale Serve
+ist für den öffentlichen Pfad nicht erforderlich und Funnel bleibt aus.
 
-1. Aktuelle Caddy-, Compose- und Tailscale-Konfiguration, DNS, Portbelegung und
-   einen funktionierenden Tailscale-SSH-Rückweg sichern. Bestehende Caddy-Sites
-   nicht überschreiben. Bei Tailscale Serve auf 443 zuerst einen privaten
-   Rückweg über SSH sicherstellen und Portkonflikt gezielt auflösen.
-2. DNS-A-Eintrag für `invoice.mynet-online.de` auf die öffentliche IPv4-Adresse
-   setzen; AAAA nur bei tatsächlich erreichbarem und abgesichertem IPv6.
-   Host- und Provider-Firewall: eingehend TCP 80/443 für Caddy zulassen,
-   TCP 8080/8081/4180 (IPv4 und IPv6) schließen. SSH im Tailnet erhalten.
-   Docker-Portbindungen zusätzlich prüfen; Firewall allein genügt nicht.
-3. In Google Cloud einen OAuth-Client vom Typ **Webanwendung** erstellen,
-   Consent Screen und gegebenenfalls Testnutzer einrichten. Autorisierte
-   Redirect-URI exakt
-   `https://invoice.mynet-online.de/oauth2/callback` eintragen.
-   Autorisierte JavaScript-Origin ist für diesen serverseitigen Flow nicht
-   erforderlich; falls die Google-Oberfläche sie verlangt, exakt
-   `https://invoice.mynet-online.de` verwenden. Keine URI mit Port oder Slash
-   am Ende eintragen.
-4. Im freigegebenen Checkout `.env.example` nach `.env` kopieren, Datei mit
-   `chmod 600 .env` schützen und echte Client-ID und Secrets ausschließlich
-   dort eintragen. Secret ohne sichtbares Kommandozeilenargument erzeugen:
+## Versionierte Konfiguration
 
-   ```bash
-   openssl rand -base64 32
-   ```
+- `compose.yaml`: `public` startet OAuth2 Proxy. API-Port 8080 bleibt an
+  Loopback. `INVOICE_UI_BIND_ADDRESS` und `OAUTH2_PROXY_BIND_ADDRESS` stehen
+  lokal standardmäßig auf `127.0.0.1`; auf `vps-contabo` werden beide auf
+  dessen eigene Tailscale-IPv4-Adresse gesetzt. Host-Port 8081 bzw. 4180
+  bleibt unverändert. Containerinterne Listener und UI-API-Verbindung bleiben
+  im Compose-Netz erreichbar.
+- `.env.example`: Platzhalter für Google-Secrets und Allowlist-Pfad sowie
+  dokumentierte Bind-Adressen und `OAUTH2_PROXY_TRUSTED_PROXY_IPS`.
+  `.env` und `runtime/` sind ignoriert. `docker compose config` ohne
+  `--quiet` kann Secrets ausgeben; Ausgabe nicht veröffentlichen.
+- `deploy/caddy/invoice.mynet-online.de.Caddyfile`: Site-Block für Caddy auf
+  `my-vps`; `{$INVOICE_OAUTH2_UPSTREAM}` und `{$INVOICE_UI_UPSTREAM}` sind
+  Caddy-Umgebungsvariablen, keine Compose-Variablen. Beide zeigen auf
+  `vps-contabo` über Tailscale. Die Platzhalterdatei
+  `deploy/caddy/upstreams.env.example` enthält keine echte Tailnet-IP.
+- `deploy/oauth2/allowed-emails.example`: ausschließlich ein Platzhalter.
 
-   Ausgabe direkt in die geschützte `.env` übernehmen; nicht in Tickets,
-   Shell-Verlauf oder Git kopieren. Die 32 Zufallsbytes sind für den
-   Cookie-Secret-Wert geeignet. Für die Allowlist:
+Lokale Entwicklung bleibt mit Loopback-Bindungen und Mock-AI nutzbar. Das
+`public`-Profil wird nur ausdrücklich gestartet. Die Konfiguration benötigt
+keine Cloudflare- oder Funnel-Dienste und keine Änderungen an der Java-API.
 
-   ```bash
-   mkdir -p runtime/secrets
-   chmod 700 runtime/secrets
-   cp deploy/oauth2/allowed-emails.example runtime/secrets/oauth2-allowed-emails
-   sudo chgrp 10001 runtime/secrets/oauth2-allowed-emails
-   chmod 640 runtime/secrets/oauth2-allowed-emails
-   ```
+## Betrieb auf vps-contabo
 
-   Platzhalter durch jede einzeln erlaubte Google-Adresse ersetzen. Datei darf
-   nicht leer sein und keine `*`- oder Domain-Freigabe enthalten. Bei
-   Rechteproblemen die Lesbarkeit für die Container-UID/GID `10001:10001`
-   prüfen, ohne die Datei allgemein lesbar zu machen. Die Datei wird direkt
-   und nur lesbar in den Container gemountet.
-5. Die Docker-Bridge-Gateway-Adresse des Netzes ermitteln, an das
-   `invoice-oauth2-proxy` angeschlossen wird, und als einzelne `/32`-Adresse
-   in `.env` unter `OAUTH2_PROXY_TRUSTED_PROXY_IPS` setzen. Sie ist die
-   Quelladresse von Host-Caddy am veröffentlichten Loopback-Port. Bei
-   abweichender Docker-NAT-Konfiguration die tatsächliche Quelladresse
-   prüfen. Niemals `0.0.0.0/0` oder das gesamte Bridge-Netz freigeben.
+Im freigegebenen Checkout `.env.example` nach `.env` kopieren und mit Modus
+`0600` schützen. Client-ID und Secrets sowie die echte Allowlist nur dort bzw.
+unter `runtime/secrets/` eintragen. Das Cookie-Secret kann mit
+`openssl rand -base64 32` erzeugt werden; es gehört weder in Kommandozeilen-
+argumente noch in Git oder Tickets. Allowlist-Datei für Container-UID/GID
+`10001:10001` lesbar und für andere Benutzer unlesbar halten.
 
-   ```bash
-   docker compose --profile public up -d invoice-oauth2-proxy
-   docker inspect "$(docker compose ps -q invoice-oauth2-proxy)" --format '{{range .NetworkSettings.Networks}}{{.Gateway}}{{end}}'
-   ```
-
-   Danach die Gateway-Adresse in `.env` eintragen und den Proxy mit
-   `docker compose --profile public up -d --force-recreate invoice-oauth2-proxy`
-   neu erstellen. Der erste Start mit dem engen Default kann den Proxy-Header
-   ablehnen; kein Öffnen von 4180 als Behelf.
-6. Site-Block in die vorhandene Caddy-Konfiguration importieren. Beispiel für
-   eine Installation mit `/etc/caddy/Caddyfile` (vorhandene Imports prüfen):
-
-   ```bash
-   sudo cp /etc/caddy/Caddyfile /etc/caddy/Caddyfile.pre-sprint-043
-   sudo install -m 0644 deploy/caddy/invoice.mynet-online.de.Caddyfile /etc/caddy/invoice.mynet-online.de.Caddyfile
-   sudoedit /etc/caddy/Caddyfile
-   # import /etc/caddy/invoice.mynet-online.de.Caddyfile hinzufügen
-   sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-   sudo systemctl reload caddy
-   ```
-
-   Die vorhandene Site für dieselbe Domain darf keine Route an der Authentisierung
-   vorbei anbieten. Bestehende Caddy-Einstellungen für andere Domains bewahren.
-   Caddy verwaltet das öffentliche TLS-Zertifikat. Keine Caddy- oder
-   OAuth2-Proxy-URL zeigt direkt auf `invoice-worker-api`.
-
-## Start, Status, Logs und Neustart
+In `.env` werden `INVOICE_UI_BIND_ADDRESS` und
+`OAUTH2_PROXY_BIND_ADDRESS` auf die **eigene** Tailscale-IPv4-Adresse von
+`vps-contabo` gesetzt. `OAUTH2_PROXY_TRUSTED_PROXY_IPS` wird auf die
+Tailscale-IPv4-Adresse von **my-vps** mit `/32` gesetzt. Keine echten Adressen
+in versionierte Beispiele schreiben. Danach auf `vps-contabo`:
 
 ```bash
+docker compose --profile public --profile ui config --quiet
+bash deploy/tests/compose-port-security-test.sh
 docker compose --profile watch --profile ui --profile public up -d invoice-worker-watch invoice-worker-api invoice-worker-ui invoice-oauth2-proxy
 docker compose --profile watch --profile ui --profile public ps
+docker compose port invoice-worker-api 8080
+docker compose port invoice-worker-ui 8081
+docker compose port invoice-oauth2-proxy 4180
 docker compose --profile public logs --tail=100 invoice-oauth2-proxy
-docker compose --profile ui logs --tail=100 invoice-worker-ui
+```
+
+Die drei `port`-Ausgaben müssen API-Loopback und die beiden eigenen
+Tailnet-Bindungen zeigen. Änderungen an `.env` oder Allowlist werden durch
+Neuerstellung des OAuth2-Proxy-Containers aktiviert:
+
+```bash
+docker compose --profile public up -d --force-recreate invoice-oauth2-proxy
+```
+
+Das bestehende `deploy/check-staging.sh` prüft die UI standardmäßig über
+Loopback. Bei reiner Tailnet-Bindung muss `STAGING_UI_URL` für Deployment
+und Betriebscheck ausdrücklich auf die **eigene** Tailnet-Adresse gesetzt
+werden; die Shell-Skripte lesen `.env` nicht selbst:
+
+```bash
+STAGING_UI_URL='http://<vps-contabo-tailnet-ip>:8081/health' ./deploy/check-staging.sh
+```
+
+Die Compose-Konfiguration ist keine Firewall. Host- und Provider-Firewall
+müssen öffentliche Zugriffe auf 8080/8081/4180 unter IPv4 und IPv6 sperren;
+Tailnet-Regeln erlauben 8081/4180 nur von `my-vps`. Eine offene bestehende
+Vaadin-WebSocket-Verbindung wird erst beim neuen Handshake erneut geprüft;
+bei dringender Kontosperre Verbindungen trennen und Sitzungen invalidieren.
+
+## Betrieb auf my-vps
+
+DNS für `invoice.mynet-online.de` zeigt auf `my-vps`. Dort veröffentlicht
+Caddy 80/443 und besitzt das öffentliche TLS-Zertifikat. Auf `my-vps` eine
+rootgeschützte Kopie von `deploy/caddy/upstreams.env.example` mit den beiden
+Tailnet-Upstreams anlegen. Caddys systemd-Dienst erhält die Datei über eine
+Drop-in-Konfiguration mit `EnvironmentFile=/etc/caddy/invoice-upstreams.env`.
+Den Site-Block in das vorhandene Caddyfile importieren; bestehende Sites und
+Portbelegung vorher prüfen. Bei einem anderen Caddy-Service-Layout dieselben
+Variablen auf dessen tatsächlichem Startweg bereitstellen.
+
+```bash
+sudo install -m 0600 deploy/caddy/upstreams.env.example /etc/caddy/invoice-upstreams.env
+sudoedit /etc/caddy/invoice-upstreams.env
+sudo install -m 0644 deploy/caddy/invoice.mynet-online.de.Caddyfile /etc/caddy/invoice.mynet-online.de.Caddyfile
+sudoedit /etc/caddy/Caddyfile
+# import /etc/caddy/invoice.mynet-online.de.Caddyfile ergänzen
+sudo systemctl edit caddy
+# Im Drop-in: [Service] und EnvironmentFile=/etc/caddy/invoice-upstreams.env
+sudo systemctl daemon-reload
+sudo sh -c 'set -a; . /etc/caddy/invoice-upstreams.env; exec caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile'
+sudo systemctl restart caddy
 sudo systemctl status caddy
 sudo journalctl -u caddy -n 100 --no-pager
-docker compose --profile public up -d --force-recreate invoice-oauth2-proxy
-sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-sudo systemctl reload caddy
 ```
 
-Logs können trotz abgeschalteter Auth-/Request-Logs sensible Pfade oder
-Anmeldeinformationen in Fehlermeldungen enthalten. Zugriff und Aufbewahrung
-einschränken. Änderungen an Allowlist oder `.env` durch Neuerstellung des
-OAuth2-Proxy-Containers aktivieren. Caddy-Änderungen validieren und neu laden.
+Die Caddy-Variablen werden bei der Caddyfile-Analyse ersetzt; nach Änderung
+der Upstreams erneut validieren und Caddy neu starten. `caddy validate` ohne
+diese Variablen prüft nicht die produktive Konfiguration. Den bestehenden
+Caddyfile-Stand vor Änderungen sichern. Für Caddy und OAuth2 Proxy nur die
+Tailnet-Routen zwischen den beiden VPS verwenden.
 
-## Abnahme und Betrieb
+## Abnahme und Wartung
 
-Vor Veröffentlichung `docker compose --profile watch --profile ui --profile
-public config --quiet`, `bash deploy/tests/compose-port-security-test.sh`,
-`./mvnw clean verify`, Shell-Syntax und `git diff --check` ausführen. Die
-Compose-Ausgabe ohne `--quiet` nicht mit echten Secrets speichern.
-`sudo caddy validate` gegen die **vollständige** VPS-Konfiguration prüfen;
-`oauth2-proxy --config-test` kann im Container mit echten lokalen Dateien
-verwendet werden, wenn das Image dies unterstützt.
+Von außerhalb des Tailnets Zertifikat und Login prüfen. Unangemeldete
+UI-Anfragen führen zur Google-Anmeldung; ein erlaubtes Konto erhält die
+vollständig ladende Vaadin-UI, ein nicht erlaubtes Konto wird abgewiesen.
+`/oauth2/callback`, Navigation, Upload und Vaadin-WebSocket-Verbindungen
+prüfen. Externe Verbindungen zu `vps-contabo:8080/8081/4180` müssen scheitern;
+auch `/api/...` auf der öffentlichen Domain darf keine API-Antwort liefern.
+Von einem nicht berechtigten Tailnet-Client muss der direkte Zugriff auf
+`:8081` und `:4180` scheitern. Tailscale-SSH für Administratoren separat
+prüfen. Tests mit Rechnungen nur mit nicht produktiven Testdaten und Mock-AI.
 
-Manuell von einem externen Gerät: TLS-Zertifikat und Hostnamen kontrollieren;
-unangemeldeter `GET /`, Assets, `/upload` und Vaadin-WebSocket-Handshake
-erfordern Anmeldung. `/oauth2/callback` muss über HTTPS erreichbar sein.
-Erlaubtes Konto erhält die vollständig ladende Vaadin-UI; nicht erlaubtes Konto
-wird abgewiesen. PDF-Upload nur mit nicht produktiver Testdatei und Mock-AI
-prüfen. WebSocket, Upload und Navigation im Browser testen. Von extern müssen
-8080/8081/4180 (IPv4 und IPv6, soweit vorhanden) unerreichbar sein. Auf dem
-VPS `docker compose port` für alle drei Dienste und `ss -lnt` prüfen; nur
-`127.0.0.1` ist erlaubt. Öffentliche `/api/...`-Aufrufe dürfen keine API-Antwort
-erhalten. SSH/Tailscale testen und einen unberechtigten Tailnet-Client ablehnen.
+Nach Änderungen an Caddy, OAuth2 Proxy, DNS, Docker oder Tailnet-Regeln die
+Abnahme wiederholen. Logs können sensible Pfade enthalten; Zugriff und
+Aufbewahrung begrenzen. Lokal auszuführen sind `git diff --check`,
+`docker compose --profile public --profile ui config --quiet`, der
+Compose-Porttest und `./mvnw clean verify`. Echte Google-, TLS-, Firewall-
+und Tailnet-Prüfungen sind nur an den betroffenen Systemen möglich.
 
-Nach Caddy-, OAuth2-Proxy-, Docker- oder Tailscale-Updates sowie Änderungen an
-Allowlist, DNS oder Firewall die Abnahme wiederholen. Sitzungscookies laufen
-nach acht Stunden ab; eine bereits offene WebSocket-Verbindung wird erst beim
-erneuten Handshake geprüft. Bei dringender Sperrung eines Kontos zusätzlich
-Sitzungen durch Cookie-Secret-Rotation oder Container-Neustart und Trennen
-bestehender Verbindungen behandeln. Nach Cookie-Secret-Rotation müssen sich alle
-Benutzer neu anmelden.
+## Rollback
 
-## Rollback zum privaten Tailscale-Betrieb
-
-Tailscale-SSH-Verbindung vor dem Rollback prüfen. Nur den Sprint-043-Import aus
-dem Host-Caddyfile entfernen oder die gesicherte Caddyfile zurückkopieren, falls
-seitdem keine weiteren Änderungen erfolgt sind. Vorhandene andere Sites
-bewahren. Danach:
+Vorherigen Caddyfile-Stand auf `my-vps` geschützt sichern. Bei Rücknahme
+nur den Invoice-Site-Import entfernen oder die geprüfte Sicherung
+wiederherstellen, Caddy mit geladenen Upstream-Variablen validieren und
+neu starten. Andere Sites dürfen nicht verändert werden. Auf
+`vps-contabo` den OAuth2-Proxy-Dienst bei Bedarf stoppen:
 
 ```bash
-sudo cp /etc/caddy/Caddyfile.pre-sprint-043 /etc/caddy/Caddyfile
-sudo caddy validate --config /etc/caddy/Caddyfile --adapter caddyfile
-sudo systemctl reload caddy
 docker compose --profile public stop invoice-oauth2-proxy
-docker compose --profile ui ps invoice-worker-api invoice-worker-ui
-tailscale serve status
 ```
 
-Die `cp`-Zeile nur verwenden, wenn das Backup noch der gewünschten übrigen
-Caddy-Konfiguration entspricht. Bei zuvor deaktiviertem Tailscale Serve und
-freiem Tailnet-Port 443 kann der bisherige private Zugriff manuell wieder
-aktiviert werden:
+Für einen privaten Notfallzugang kann ein Administrator über Tailscale-SSH
+einen Tunnel zum **an Tailnet-IP gebundenen** UI-Port aufbauen:
 
 ```bash
-sudo tailscale serve --bg --https=443 http://127.0.0.1:8081
-tailscale serve status
+ssh -N -L 18081:<vps-contabo-tailnet-ip>:8081 '<admin>@<vps-contabo-tailnet-name>'
 ```
 
-Falls Caddy weiterhin den Tailnet-Port 443 bindet oder Serve nicht verfügbar
-ist, über Tailscale-SSH einen privaten Tunnel benutzen:
-
-```bash
-ssh -N -L 18081:127.0.0.1:8081 '<vps-user>@<tailscale-vps-name>'
-```
-
-Der Browser öffnet `http://127.0.0.1:18081/`. Dieser Zugriff umgeht Google;
-Tailnet-Regeln müssen ihn schützen. Keine Runtime-Volumes, Datenbanken,
-Backups, DNS-Einträge oder Google-Credentials automatisch löschen. Die
-öffentliche DNS- und Firewall-Rücknahme erfolgt nach Prüfung der anderen
-Caddy-Sites manuell.
-
-## Grenzen der lokalen Verifikation
-
-OAuth-Login, Zertifikatsausstellung, externe Portfilter, tatsächliche
-Docker-NAT-Quelladresse, Vaadin-WebSocket- und Upload-Verhalten sowie
-Tailscale-Regeln benötigen eine manuelle VPS-/Browser-Abnahme. Der lokale
-Build nutzt keine Google- oder produktiven OpenAI-Aufrufe.
+Alternativ UI und OAuth2 Proxy nach dokumentierter Prüfung wieder nur an
+Loopback binden und die betroffenen Container neu erstellen. Ein privater
+Tunnel oder Serve-Zugang umgeht Google OAuth und bleibt ausschließlich für
+restriktiv freigegebene Administratoren. Keine Runtime-Daten, Datenbanken,
+Backups oder Secrets automatisch löschen.

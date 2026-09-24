@@ -1,23 +1,23 @@
-# Import this site block into the existing host Caddyfile after checking for
-# conflicting routes. Caddy alone owns public ports 80 and 443.
+# Import this site block into Caddy on my-vps. Both upstreams point to
+# vps-contabo over Tailscale; set them in Caddy's service environment.
 invoice.mynet-online.de {
     handle /oauth2/* {
-        reverse_proxy 100.125.118.22:4180 {
+        reverse_proxy {$INVOICE_OAUTH2_UPSTREAM} {
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Uri {uri}
         }
     }
 
     handle {
-        forward_auth 100.125.118.22:4180 {
+        forward_auth {$INVOICE_OAUTH2_UPSTREAM} {
             uri /oauth2/auth
             header_up X-Real-IP {remote_host}
             @unauthenticated status 401
             handle_response @unauthenticated {
-                redir * /oauth2/start?rd={scheme}://{host}{uri}
+                redir * /oauth2/sign_in?rd={scheme}://{host}{uri}
             }
         }
         # Caddy's reverse_proxy preserves Vaadin's WebSocket upgrade and streams uploads.
-        reverse_proxy 100.125.118.22:8081
+        reverse_proxy {$INVOICE_UI_UPSTREAM}
     }
 }

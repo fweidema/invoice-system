@@ -24,22 +24,23 @@ Eigentuemer noch Modi bestehender Dateien. Die Konfiguration liegt in
 `docker/application.properties`; Secrets gehoeren nicht in diese Datei oder in
 Git. Die versionierte Docker-Konfiguration wählt `ai.provider=openai`; der OpenAI-Key wird separat über `OPENAI_API_KEY` bereitgestellt. Ein Key allein aktiviert keinen Provider.
 
-## Privater Anwendungszugriff
+## Anwendungszugriff über zwei VPS
 
-API/UI sind ausschließlich an Host-Loopback gebunden. Für den VPS-Browserzugriff
-Tailscale Serve zur UI verwenden; die API bleibt im Compose-Netz unter
-`http://invoice-worker-api:8080/`. Öffentliche Ports 8080/8081 und Funnel sind
-nicht vorgesehen. Einrichtung, ACL-Abnahme, Betrieb und sicherer Rollback
-sind verbindlich in [vps-access-security.md](vps-access-security.md) beschrieben.
-Für öffentliches HTTPS ist das optionale Compose-Profil `public` mit OAuth2 Proxy
-und einem Site-Block für den vorhandenen Host-Caddy vorbereitet. Caddy benötigt
-80/443, OAuth2 Proxy bindet nur `127.0.0.1:4180`, und die API erhält keine
-öffentliche Route. Einrichtung, Secrets, manuelle Abnahme und Rollback stehen in
-[Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
-Tailscale-Installation, Anmeldung und Änderungen
-auf dem VPS bleiben manuell. Vor dem Rollout lokal
-`bash deploy/tests/compose-port-security-test.sh` ausführen (Python 3 und Compose).
-Auch bei einem Code-Rollback müssen die Loopback-Bindungen erhalten bleiben.
+Die öffentliche Domain zeigt auf `my-vps`; nur dessen Caddy veröffentlicht
+80/443. Invoice-System, UI und OAuth2 Proxy laufen auf `vps-contabo`. Dessen
+UI-Port 8081 und OAuth2-Proxy-Port 4180 binden ausschließlich an seine eigene
+Tailscale-IP; nur `my-vps` darf diese Ports im Tailnet erreichen. API-Port
+8080 bleibt auf Loopback, die UI verwendet intern
+`http://invoice-worker-api:8080/`. Es gibt keine öffentliche API-Route und
+keinen Funnel. Ein direkter Tailnet-Aufruf der UI umgeht Google und muss
+durch Tailnet-Regeln verhindert werden. Der Google-Login und die danach
+ausführbare Vaadin-Anwendung wurden produktiv bestätigt.
+
+Die getrennten Konfigurations- und Betriebsaufgaben für beide VPS stehen in
+[Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md). Lokale
+Entwicklung verwendet weiterhin Loopback-Bindungen. Vor einem Rollout
+`bash deploy/tests/compose-port-security-test.sh` ausführen; die effektiven
+Tailnet-Bindungen und Firewall-Regeln auf `vps-contabo` gesondert prüfen.
 
 ## Erstinstallation
 
@@ -140,9 +141,12 @@ Die wichtigsten optionalen Umgebungsvariablen sind:
 | `STAGING_CONFIG_FILE` | `docker/application.properties` | externe Konfiguration |
 | `STAGING_DATABASE_FILE` | `runtime/database/invoice-system.db` | SQLite-Datei |
 | `INVOICE_API_PORT` | `8080` | API-Port ausschließlich auf `127.0.0.1` |
-| `INVOICE_UI_PORT` | `8081` | UI-Port ausschließlich auf `127.0.0.1` |
+| `INVOICE_UI_PORT` | `8081` | UI-Hostport |
+| `INVOICE_UI_BIND_ADDRESS` | `127.0.0.1` | auf vps-contabo: eigene Tailscale-IP |
+| `OAUTH2_PROXY_BIND_ADDRESS` | `127.0.0.1` | auf vps-contabo: eigene Tailscale-IP |
+| `OAUTH2_PROXY_TRUSTED_PROXY_IPS` | `127.0.0.1/32` | auf vps-contabo: nur my-vps-Tailscale-IP/32 |
 | `STAGING_API_URL` | `http://127.0.0.1:8080/api/health` | API-Pruefziel |
-| `STAGING_UI_URL` | `http://127.0.0.1:8081/health` | UI-Pruefziel |
+| `STAGING_UI_URL` | `http://127.0.0.1:8081/health` | bei Tailnet-Bindung ausdrücklich auf eigene Tailscale-IP von vps-contabo setzen; Skript liest `.env` nicht |
 
 Abweichende relative Pfade werden gegen das Repository-Root aufgeloest.
 `STAGING_CHECK_ATTEMPTS` und `STAGING_CHECK_INTERVAL_SECONDS` steuern die
@@ -229,6 +233,6 @@ aber nicht automatisch ueberschrieben. Details stehen in
 
 ## Rechnungsupload betreiben
 
-UI, API und Watch werden vom vorhandenen Deployment gemeinsam gestartet. Die UI benötigt jetzt den schreibbaren `runtime/input:/data/input`-Mount. Nach menschlicher Freigabe das UI-Image und den Container aktualisieren; Pfade, Rechte und den bewusst gewählten AI-Provider prüfen. Die mitgelieferte Docker-Konfiguration verwendet Mock-AI. Lokal startet `./scripts/dev-start.sh full` alle drei Services und `./scripts/dev-stop.sh` stoppt auch die UI. Loopback und Tailscale Serve bleiben unverändert.
+UI, API und Watch werden vom vorhandenen Deployment gemeinsam gestartet. Die UI benötigt den schreibbaren `runtime/input:/data/input`-Mount. Nach menschlicher Freigabe das UI-Image und den Container aktualisieren; Pfade, Rechte und den bewusst gewählten AI-Provider prüfen. Die mitgelieferte Docker-Konfiguration verwendet Mock-AI. Lokal startet `./scripts/dev-start.sh full` alle drei Services und `./scripts/dev-stop.sh` stoppt auch die UI. Für den produktiven Zwei-VPS-Zugang gelten die Tailnet-Bindungen und Zugriffsregeln aus [Sprint 043](codex-tasks/043-public-access-caddy-google-oauth.md).
 
 Einrichtung, manuelle Abnahme und Rollback: [Rechnungsupload](invoice-upload.md).

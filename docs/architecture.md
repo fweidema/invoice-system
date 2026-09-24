@@ -83,14 +83,15 @@ integriert werden koennen.
 - Oeffentliche APIs werden dokumentiert und moeglichst stabil gehalten.
 - Neue Abhaengigkeiten werden nur eingefuehrt, wenn Standard-JDK-Mittel nicht sinnvoll ausreichen.
 
-## VPS-Zugriffsgrenze (Sprint 041)
+## VPS-Zugriffsgrenze (Sprint 043)
 
-Autorisierte Tailnet-Clients erreichen per HTTPS Tailscale Serve auf dem Host.
-Serve leitet ausschließlich an die UI auf `127.0.0.1:8081` weiter. Die UI nutzt
-die API intern über `http://invoice-worker-api:8080/`. Docker veröffentlicht
-auch den API-Diagnoseport ausschließlich auf `127.0.0.1:8080`. Containerinterne
-Listener bleiben auf `0.0.0.0`; öffentliche Anwendungsports sind ausgeschlossen.
-Die Zugriffskontrolle erfolgt im Tailnet, ohne Bearer-Token-Authentifizierung
-in Java. Funnel ist kein Standardzugangsweg. Optionales öffentliches HTTPS
-erfordert einen Reverse Proxy auf Port 443 mit zusätzlicher Authentifizierung.
-[Betriebs- und Rollback-Anleitung](vps-access-security.md).
+DNS für `invoice.mynet-online.de` zeigt auf `my-vps`. Nur dort veröffentlicht
+Caddy 80/443. Caddy erreicht OAuth2 Proxy (`:4180`) und die Vaadin-UI (`:8081`)
+auf `vps-contabo` über Tailscale. Beide Host-Ports binden ausschließlich an
+die Tailscale-IP von `vps-contabo`; Tailscale-Regeln erlauben sie nur für
+`my-vps`. Caddy authentifiziert alle UI-Anfragen über OAuth2 Proxy und Google.
+Die UI nutzt die API intern über `http://invoice-worker-api:8080/`; ihr
+Host-Diagnoseport bleibt auf `127.0.0.1:8080`. Es gibt keine öffentliche
+API-Route und keinen Tailscale Funnel. Direkter Tailnet-Zugriff auf 8081 würde
+Google umgehen und ist für normale Tailnet-Clients gesperrt.
+[Architektur, Betrieb und Rollback](codex-tasks/043-public-access-caddy-google-oauth.md).
