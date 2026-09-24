@@ -55,7 +55,8 @@ public class ProcessingStateTracker {
             if (state.status() == ProcessingStatus.ARCHIVED || state.status() == ProcessingStatus.DUPLICATE) {
                 return new ProcessingAdmission(state, false, true);
             }
-            if (state.status() == ProcessingStatus.MANUAL_REVIEW) {
+            if (state.status() == ProcessingStatus.MANUAL_REVIEW
+                    || state.status() == ProcessingStatus.MANUALLY_COMPLETED) {
                 return new ProcessingAdmission(state, false, false);
             }
             if (state.status() == ProcessingStatus.RETRY_PENDING && !retryPolicy.isDue(state.nextRetryAt())) {

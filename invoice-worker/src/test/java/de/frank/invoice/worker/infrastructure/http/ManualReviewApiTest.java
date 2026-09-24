@@ -71,6 +71,20 @@ class ManualReviewApiTest {
     }
 
     @Test
+    void manuallyCompletedCaseDoesNotOfferRetryOrCompletionAgain() throws Exception {
+        final ManualReviewService service = mock(ManualReviewService.class);
+        when(service.detail("processing-1")).thenReturn(reviewCase(ProcessingStatus.MANUALLY_COMPLETED));
+        start(service);
+
+        final HttpResponse<String> response = get("/api/manual-review/processing-1");
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body())
+                .contains("\"processingStatus\":\"MANUALLY_COMPLETED\"")
+                .doesNotContain("\"complete\"", "\"retry\"");
+    }
+
+    @Test
     void stalePatchReturnsConflictAndFieldErrorsUseExistingEnvelope() throws Exception {
         final ManualReviewService service = mock(ManualReviewService.class);
         when(service.correctInvoice(eq("processing-1"), any())).thenThrow(new ManualReviewException(
@@ -121,10 +135,14 @@ class ManualReviewApiTest {
     }
 
     private ManualReviewCase reviewCase() {
+        return reviewCase(ProcessingStatus.MANUAL_REVIEW);
+    }
+
+    private ManualReviewCase reviewCase(final ProcessingStatus status) {
         return new ManualReviewCase(
                 new ProcessingState(
                         "processing-1", "document-1", "hash", "invoice.pdf", "/private/input/invoice.pdf",
-                        ProcessingStatus.MANUAL_REVIEW, 1, null, "failure",
+                        status, 1, null, "failure",
                         Instant.parse("2026-07-26T10:00:00Z"), null,
                         Instant.parse("2026-07-26T09:00:00Z"), null,
                         null, null, Instant.parse("2026-07-26T10:00:00Z")),

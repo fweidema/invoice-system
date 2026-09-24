@@ -166,7 +166,10 @@ class ManualReviewServiceTest {
     }
 
     @Test
-    void completeUsesDistinctTerminalStatus() {
+    void retryPendingCanBeManuallyCancelled() {
+        state = state(ProcessingStatus.RETRY_PENDING, 2);
+        when(stateRepository.findByProcessingId("processing-1")).thenReturn(Optional.of(state));
+
         final ManualReviewCase result = service.complete("processing-1", NOW, "reviewed");
 
         assertThat(result.state().status()).isEqualTo(ProcessingStatus.MANUALLY_COMPLETED);

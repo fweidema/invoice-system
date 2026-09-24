@@ -69,7 +69,10 @@ Fehlende relative Dateien blockieren die Löschung nicht; bei mehreren
 vorhandenen Treffern wird sie aus Sicherheitsgründen abgelehnt. Das Cockpit
 zeigt getrennte Meldungen für laufende Verarbeitung, unsichere Dateizuordnung,
 Dateisystem- und Datenbankfehler. `MANUAL_REVIEW` ist als ruhender Zustand
-löschbar, ein geplanter Retry dagegen nicht.
+löschbar. Bei `RETRY_PENDING` wird der Fall zuerst unter **Manual Review**
+geöffnet und über **Retry abbrechen** bestätigt. Der terminale Zustand
+`MANUALLY_COMPLETED` verhindert eine erneute automatische Verarbeitung;
+anschließend kann das Dokument im Cockpit gelöscht werden.
 
 Die View zeigt keine Live-Ereignisse zwischen den
 60-Sekunden-Aktualisierungen. Eine bereits geöffnete Detailansicht bleibt

@@ -70,6 +70,23 @@ class ManualReviewViewTest {
     }
 
     @Test
+    void retryPendingOffersExplicitManualCancellation() {
+        final FakeApi api = new FakeApi();
+        final ManualReviewItem retryPending = new ManualReviewItem(
+                "processing-1", "document-1", "hash", "invoice.pdf",
+                "RETRY_PENDING", 2, "OCR_TIMEOUT", "OCR timed out",
+                "2026-07-26T09:00:00Z", "2026-07-26T11:00:00Z", null, null,
+                "2026-07-26T10:00:00Z", "ACME", "R-1", "2026-07-01",
+                "12.50", "EUR", "INVOICE", true, true, false,
+                List.of("complete", "ocrText", "original"), List.of(), List.of());
+
+        final ManualReviewDetailDialog dialog = new ManualReviewDetailDialog(api, retryPending, () -> { });
+
+        assertThat(dialog.completeButton().getText()).isEqualTo("Retry abbrechen");
+        assertThat(dialog.completeButton().isVisible()).isTrue();
+    }
+
+    @Test
     void originalDownloadIsConfiguredWithoutEagerlyReadingDocument() {
         final FakeApi api = new FakeApi();
 

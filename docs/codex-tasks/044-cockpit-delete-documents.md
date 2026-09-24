@@ -56,10 +56,13 @@ Fehlt ein relativer Pfad unter allen zulässigen Wurzeln, wird kein Pfad in den
 Löschplan aufgenommen. Mehrere vorhandene Treffer bleiben ein Sicherheitsfehler.
 Wurzeln, Verzeichnisse, Datenbank und fremde Dokumente dürfen nicht gelöscht
 werden. Fehlende Dateien sind kontrolliert erlaubt. Aktive oder für Retry
-vorgesehene Zustände werden abgewiesen.
+vorgesehene Zustände werden abgewiesen. Ein geplanter Retry kann in der
+Manual-Review-Ansicht ausdrücklich über `Retry abbrechen` in den terminalen
+Zustand `MANUALLY_COMPLETED` überführt werden. Dieser Zustand wird nicht erneut
+automatisch verarbeitet und kann anschließend gelöscht werden.
 `MANUAL_REVIEW` wartet auf eine menschliche Entscheidung und ist kein aktiver
 oder geplanter automatischer Verarbeitungslauf; dieser Zustand darf gelöscht
-werden. `RETRY_PENDING` bleibt gesperrt.
+werden. `RETRY_PENDING` bleibt bis zu diesem bestätigten Abbruch gesperrt.
 
 Dateien werden vor der Datenbanklöschung in Quarantänenamen im selben
 Verzeichnis verschoben. Scheitert eine Verschiebung oder die DB-Transaktion,

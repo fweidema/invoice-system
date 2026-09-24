@@ -82,6 +82,20 @@ class ProcessingStateTrackerTest {
     }
 
     @Test
+    void manuallyCompletedRetryIsNotAdmittedForAutomaticProcessing() {
+        final InMemoryStateRepository repository = new InMemoryStateRepository();
+        final ProcessingStateTracker tracker = tracker(repository, NOW);
+        final ProcessingState completed = state(ProcessingStatus.MANUALLY_COMPLETED, 2);
+        repository.save(completed);
+
+        final ProcessingStateTracker.ProcessingAdmission admission = tracker.admit(document());
+
+        assertThat(admission.process()).isFalse();
+        assertThat(admission.duplicate()).isFalse();
+        assertThat(admission.state()).isSameAs(completed);
+    }
+
+    @Test
     void failReturnsExistingManualReviewWithoutIllegalSelfTransition() {
         final InMemoryStateRepository repository = new InMemoryStateRepository();
         final ProcessingStateTracker tracker = tracker(repository, NOW);

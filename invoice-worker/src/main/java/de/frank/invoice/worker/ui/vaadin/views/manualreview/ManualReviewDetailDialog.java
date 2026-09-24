@@ -88,7 +88,10 @@ public final class ManualReviewDetailDialog extends Dialog {
                 "Rechnung archivieren?", "Die vorhandenen Rechnungsdaten werden ohne erneute Analyse archiviert.",
                 () -> api.archive(item.processingId(), item.updatedAt())));
         complete.addClickListener(event -> confirm(
-                "Manuell abschließen?", "Der Fall wird ohne Archivierung terminal abgeschlossen.",
+                retryPending() ? "Retry abbrechen?" : "Manuell abschließen?",
+                retryPending()
+                        ? "Der geplante Retry wird abgebrochen. Anschließend kann das Dokument gelöscht werden."
+                        : "Der Fall wird ohne Archivierung terminal abgeschlossen.",
                 () -> api.complete(item.processingId(), item.updatedAt())));
         ocr.addClickListener(event -> showOcr());
         original.setText("Original-PDF herunterladen");
@@ -126,6 +129,8 @@ public final class ManualReviewDetailDialog extends Dialog {
         retry.setVisible(value.allows("retry"));
         archive.setVisible(value.allows("archive"));
         save.setVisible(value.allows("correctInvoice"));
+        complete.setText("RETRY_PENDING".equals(value.processingStatus())
+                ? "Retry abbrechen" : "Manuell abschließen");
         complete.setVisible(value.allows("complete"));
         ocr.setVisible(value.ocrAvailable() && value.allows("ocrText"));
         original.setVisible(value.originalAvailable() && value.allows("original"));
@@ -293,6 +298,10 @@ public final class ManualReviewDetailDialog extends Dialog {
         complete.setEnabled(enabled);
     }
 
+    private boolean retryPending() {
+        return "RETRY_PENDING".equals(item.processingStatus());
+    }
+
     private void invalid(final com.vaadin.flow.component.HasValidation field, final String message) {
         field.setInvalid(true);
         field.setErrorMessage(message);
@@ -320,6 +329,10 @@ public final class ManualReviewDetailDialog extends Dialog {
 
     Button retryButton() {
         return retry;
+    }
+
+    Button completeButton() {
+        return complete;
     }
 
     Anchor originalLink() {

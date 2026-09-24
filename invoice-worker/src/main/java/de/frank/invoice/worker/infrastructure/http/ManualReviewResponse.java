@@ -3,6 +3,7 @@ package de.frank.invoice.worker.infrastructure.http;
 import de.frank.invoice.worker.application.manualreview.ManualReviewCase;
 import de.frank.invoice.worker.domain.invoice.Invoice;
 import de.frank.invoice.worker.domain.processing.ProcessingState;
+import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 
 import java.util.List;
 
@@ -60,8 +61,13 @@ public record ManualReviewResponse(
 
     private static List<String> actions(final ManualReviewCase reviewCase) {
         final java.util.ArrayList<String> actions = new java.util.ArrayList<>();
-        actions.add("complete");
-        if (reviewCase.state().status() != de.frank.invoice.worker.domain.processing.ProcessingStatus.RETRY_PENDING) {
+        final ProcessingStatus status = reviewCase.state().status();
+        if (status == ProcessingStatus.MANUAL_REVIEW
+                || status == ProcessingStatus.FAILED
+                || status == ProcessingStatus.RETRY_PENDING) {
+            actions.add("complete");
+        }
+        if (status != ProcessingStatus.RETRY_PENDING && status != ProcessingStatus.MANUALLY_COMPLETED) {
             actions.add("retry");
         }
         if (reviewCase.invoice() != null && reviewCase.state().archivePath() == null) {

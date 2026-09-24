@@ -377,6 +377,18 @@ class SQLiteDocumentDeletionGatewayTest {
         assertThat(count("processing_state")).isEqualTo(1);
     }
 
+    @Test
+    void manuallyCancelledRetryCanBeDeleted() throws Exception {
+        final Path original = Files.writeString(files.resolve("cancelled.pdf"), "cancelled");
+        state(DOCUMENT, original, null, "MANUALLY_COMPLETED");
+
+        final DeleteResult result = gateway().delete(DOCUMENT);
+
+        assertThat(result).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(original)).isFalse();
+        assertThat(count("processing_state")).isZero();
+    }
+
     private SQLiteDocumentDeletionGateway gateway() {
         return new SQLiteDocumentDeletionGateway(database, List.of(files));
     }
