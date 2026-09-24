@@ -134,6 +134,17 @@ keine öffentliche Route. Tailscale Funnel wird nicht verwendet. Ein direkter
 Tailnet-Zugriff auf Vaadin würde Google umgehen und ist zu unterbinden.
 [Betrieb und Rollback](codex-tasks/043-public-access-caddy-google-oauth.md).
 
+## Integriertes Vaadin-Cockpit
+
+`/cockpit` ist eine native View im `MainLayout`. Sie nutzt über den
+`CockpitApi`-Port die bestehenden Lese-Endpunkte der internen API. Der
+`HttpCockpitApi`-Adapter erhält dieselbe API-Basisadresse wie Manual Review;
+Filter, Sortierung und Paging bleiben in den bestehenden SQLite-Abfragen.
+Die View zeigt Status, Rechnungen, Verarbeitungen und Details, lädt bei Bedarf
+und alle 60 Sekunden. Die frühere statische `/dashboard`-Auslieferung auf
+dem API-Server bleibt intern für Kompatibilität erhalten, wird von Vaadin
+aber nicht verwendet. [Bedienung und Grenzen](cockpit.md).
+
 ## Rechnungsupload
 
 ```text

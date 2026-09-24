@@ -10,7 +10,7 @@ import java.net.URI;
  * @param port HTTP port
  * @param shutdownTimeout maximum graceful shutdown wait
  * @param maximumExportInvoices maximum permitted rows per export
- * @param manualReviewApiBaseUri internal Sprint-038A API base URI
+ * @param manualReviewApiBaseUri internal API base URI used by Manual Review and Cockpit
  */
 public record UiConfiguration(
         String host,

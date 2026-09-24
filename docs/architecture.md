@@ -95,3 +95,13 @@ Host-Diagnoseport bleibt auf `127.0.0.1:8080`. Es gibt keine öffentliche
 API-Route und keinen Tailscale Funnel. Direkter Tailnet-Zugriff auf 8081 würde
 Google umgehen und ist für normale Tailnet-Clients gesperrt.
 [Architektur, Betrieb und Rollback](codex-tasks/043-public-access-caddy-google-oauth.md).
+
+## Vaadin-Cockpit
+
+Die neue Route `/cockpit` gehört zur vorhandenen Vaadin-Navigation. Ihr
+`CockpitApi`-Port liest über `HttpCockpitApi` dieselben internen REST-Endpunkte
+für Health, Rechnungen und Processing History wie das bisherige Dashboard.
+Der API-Server wendet Filter und Pagination weiterhin in SQLite an; die
+UI-Session speichert keine produktiven Daten dauerhaft. Die frühere statische
+Seite bleibt intern ausgeliefert, ist aber keine Abhängigkeit der Vaadin-View.
+[Bedienung, Datenfluss und Grenzen](cockpit.md).

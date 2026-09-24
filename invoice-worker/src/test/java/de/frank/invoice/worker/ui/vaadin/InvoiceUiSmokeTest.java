@@ -96,6 +96,16 @@ class InvoiceUiSmokeTest {
     }
 
     @Test
+    void servesCockpitRouteWithVaadinBootstrapAssets() throws Exception {
+        final HttpResponse<String> response = getText(baseUri.resolve("cockpit"));
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(mediaType(response)).isEqualTo("text/html");
+        assertThat(response.body().toLowerCase(Locale.ROOT)).contains("<div id=\"outlet\"></div>");
+        assertThat(HtmlAssetReferences.findModuleScriptSources(response.body())).isNotEmpty();
+    }
+
+    @Test
     void servesReferencedJavaScriptModulesWithJavaScriptContentType() throws Exception {
         final HttpResponse<String> pageResponse = getText(baseUri);
         final List<String> moduleSources =

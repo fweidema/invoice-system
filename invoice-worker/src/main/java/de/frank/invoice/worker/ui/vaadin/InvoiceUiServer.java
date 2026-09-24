@@ -9,6 +9,9 @@ import de.frank.invoice.worker.application.export.InvoiceExportService;
 import de.frank.invoice.worker.application.submission.DocumentSubmissionService;
 import de.frank.invoice.worker.ui.vaadin.manualreview.HttpManualReviewApi;
 import de.frank.invoice.worker.ui.vaadin.manualreview.ManualReviewApi;
+import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitApi;
+import de.frank.invoice.worker.ui.vaadin.cockpit.HttpCockpitApi;
+import de.frank.invoice.worker.ui.vaadin.views.cockpit.CockpitView;
 import de.frank.invoice.worker.ui.vaadin.views.export.InvoiceExportView;
 import de.frank.invoice.worker.ui.vaadin.views.manualreview.ManualReviewView;
 import de.frank.invoice.worker.ui.vaadin.views.upload.InvoiceUploadView;
@@ -34,6 +37,7 @@ public class InvoiceUiServer implements AutoCloseable {
     private final UiConfiguration configuration;
     private final InvoiceExportService invoiceExportService;
     private final ManualReviewApi manualReviewApi;
+    private final CockpitApi cockpitApi;
     private final DocumentSubmissionService submissionService;
     private final Tomcat tomcat = new Tomcat();
     private volatile boolean started;
@@ -53,6 +57,7 @@ public class InvoiceUiServer implements AutoCloseable {
         this.submissionService = Objects.requireNonNull(
                 submissionService, "A configured DocumentSubmissionService is required");
         this.manualReviewApi = new HttpManualReviewApi(configuration.manualReviewApiBaseUri());
+        this.cockpitApi = new HttpCockpitApi(configuration.manualReviewApiBaseUri());
         final Path uploadDirectory = submissionService.configuration().inputDirectory().toAbsolutePath().normalize();
         final Path watchDirectory = Objects.requireNonNull(watchedInputDirectory)
                 .toAbsolutePath().normalize();
@@ -134,13 +139,15 @@ public class InvoiceUiServer implements AutoCloseable {
         configureStaticResourceMimeMappings(context);
         context.addServletContainerInitializer(new LookupServletContainerInitializer(), Set.of());
         context.addServletContainerInitializer(
-                new RouteRegistryInitializer(), Set.of(InvoiceExportView.class, ManualReviewView.class, InvoiceUploadView.class));
+                new RouteRegistryInitializer(), Set.of(InvoiceExportView.class, ManualReviewView.class,
+                        InvoiceUploadView.class, CockpitView.class));
         context.addServletContainerInitializer(
                 new VaadinAppShellInitializer(), Set.of(InvoiceUiAppShell.class));
         context.getServletContext().setAttribute(
                 InvoiceUiServlet.EXPORT_SERVICE_ATTRIBUTE, invoiceExportService);
         context.getServletContext().setAttribute(
                 InvoiceUiServlet.MANUAL_REVIEW_API_ATTRIBUTE, manualReviewApi);
+        context.getServletContext().setAttribute(InvoiceUiServlet.COCKPIT_API_ATTRIBUTE, cockpitApi);
 
         context.getServletContext().setAttribute(InvoiceUiServlet.SUBMISSION_SERVICE_ATTRIBUTE, submissionService);
 

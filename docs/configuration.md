@@ -218,18 +218,22 @@ bleibt trotzdem ein Backup der SQLite-Datei empfohlen.
 
 ## Docker-Portbindungen und VPS-Zugriff
 
-Compose veröffentlicht API und UI ausschließlich an `127.0.0.1`.
-`INVOICE_API_PORT` (8080) und `INVOICE_UI_PORT` (8081) ändern hier nur die
-Host-Portnummern; die Container-Ports bleiben 8080/8081. In
+Compose veröffentlicht die API ausschließlich an `127.0.0.1`. UI und
+OAuth2 Proxy binden lokal ebenfalls an Loopback; auf `vps-contabo` werden
+`INVOICE_UI_BIND_ADDRESS` und `OAUTH2_PROXY_BIND_ADDRESS` auf die eigene
+Tailscale-IP gesetzt. `INVOICE_API_PORT` (8080) und `INVOICE_UI_PORT` (8081)
+ändern nur Host-Portnummern; die Container-Ports bleiben unverändert. In
 `docker/application.properties` bleiben die Listener auf `0.0.0.0` innerhalb
 der Container, damit Docker-NAT und interne Kommunikation funktionieren.
-Die UI nutzt im Compose-Netz `http://invoice-worker-api:8080/`;
-`INVOICE_UI_MANUAL_REVIEW_API_BASE_URI` im Standardbetrieb nicht überschreiben.
+Die UI nutzt im Compose-Netz `http://invoice-worker-api:8080/` für Manual
+Review und das integrierte Cockpit; `INVOICE_UI_MANUAL_REVIEW_API_BASE_URI`
+im Standardbetrieb nicht überschreiben.
 Außerhalb von Docker gelten die Loopback-Defaults der Java-Anwendung.
 
-Tailscale Serve leitet ausschließlich zur Loopback-UI weiter. Keine öffentliche
-API, kein Funnel und keine Java-Bearer-Token-Authentifizierung. Details und
-optionales authentifiziertes HTTPS auf Port 443 stehen in
+Im produktiven Zwei-VPS-Betrieb erreicht Caddy auf `my-vps` UI und OAuth2
+Proxy über Tailscale. Ein direkter Tailnet-Aufruf von UI-Port 8081 umgeht
+Google OAuth und muss für andere Clients gesperrt sein. Keine öffentliche
+API, kein Funnel und keine Java-Bearer-Token-Authentifizierung. Details stehen in
 [vps-access-security.md](vps-access-security.md).
 
 ## Rechnungsupload (Sprint 042)
