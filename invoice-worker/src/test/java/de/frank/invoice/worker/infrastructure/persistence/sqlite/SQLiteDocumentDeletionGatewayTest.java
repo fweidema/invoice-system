@@ -10,14 +10,17 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.security.MessageDigest;
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.List;
+import java.util.HexFormat;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -63,6 +66,78 @@ class SQLiteDocumentDeletionGatewayTest {
     }
 
     @Test
+    void deletesArchivedFileWhenOnlyPreArchivePathWasPersisted() throws Exception {
+        final Path archive = Files.createDirectories(temp.resolve("archive/2026/Supplier"));
+        final Path archived = Files.writeString(archive.resolve("2026-01-01_R-1.pdf"), "archived document");
+        final String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(Files.readAllBytes(archived)));
+        invoiceWithHash(DOCUMENT, "R-1", files.resolve("already-moved.pdf"), null, hash);
+
+        final DeleteResult result = new SQLiteDocumentDeletionGateway(database,
+                List.of(files, temp.resolve("archive")), null, temp.resolve("archive")).delete(DOCUMENT);
+
+        assertThat(result).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(archived)).isFalse();
+    }
+
+    @Test
+    void deletesExplicitArtifactsAcrossAllConfiguredRuntimeRoots() throws Exception {
+        final Path ocrRoot = Files.createDirectory(temp.resolve("ocr"));
+        final Path workRoot = Files.createDirectory(temp.resolve("work"));
+        final Path manualRoot = Files.createDirectory(temp.resolve("manual-review"));
+        final Path errorRoot = Files.createDirectory(temp.resolve("error"));
+        final Path archiveRoot = Files.createDirectory(temp.resolve("archive"));
+        final Path original = Files.writeString(files.resolve("upload.pdf"), "original");
+        final Path ocr = Files.writeString(ocrRoot.resolve("ocr.pdf"), "ocr");
+        final Path manual = Files.writeString(manualRoot.resolve("review.pdf"), "review");
+        final Path error = Files.writeString(errorRoot.resolve("error.pdf"), "error");
+        final Path archive = Files.writeString(archiveRoot.resolve("result.pdf"), "result");
+        final Path work = Files.writeString(Files.createDirectory(workRoot.resolve(PROCESSING_ID))
+                .resolve("working.pdf"), "working");
+        invoice(DOCUMENT, "R-1", original, ocr);
+        history(DOCUMENT, error);
+        state(DOCUMENT, manual, ocr, "ARCHIVED");
+        insert("UPDATE processing_state SET archive_path=? WHERE document_id=?", archive.toString(), DOCUMENT);
+
+        final DeleteResult result = new SQLiteDocumentDeletionGateway(database,
+                List.of(files, ocrRoot, workRoot, manualRoot, errorRoot, archiveRoot),
+                workRoot).delete(DOCUMENT);
+
+        assertThat(result).isEqualTo(DeleteResult.DELETED);
+        assertThat(List.of(original, ocr, manual, error, archive, work))
+                .allMatch(path -> !Files.exists(path));
+    }
+
+    @Test
+    void archiveDiscoveryRejectsMatchingContentReferencedByForeignDocument() throws Exception {
+        final Path archive = Files.createDirectories(temp.resolve("archive/2026/Supplier"));
+        final Path archived = Files.writeString(archive.resolve("2026-01-01_R-1.pdf"), "shared content");
+        final String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(Files.readAllBytes(archived)));
+        invoiceWithHash(DOCUMENT, "R-1", files.resolve("already-moved.pdf"), null, hash);
+        invoiceWithHash(OTHER, "R-2", files.resolve("other-moved.pdf"), null, hash);
+
+        assertThatThrownBy(() -> new SQLiteDocumentDeletionGateway(database,
+                List.of(files, temp.resolve("archive")), null, temp.resolve("archive")).delete(DOCUMENT))
+                .isInstanceOf(DocumentDeletionException.class)
+                .extracting(error -> ((DocumentDeletionException) error).code())
+                .isEqualTo(DocumentDeletionException.Code.UNSAFE_ARTIFACT);
+        assertThat(Files.exists(archived)).isTrue();
+        assertThat(count("invoices")).isEqualTo(2);
+    }
+
+    @Test
+    void resolvesPersistedRelativeInputPathAgainstConfiguredRoot() throws Exception {
+        final Path original = Files.writeString(files.resolve("relative.pdf"), "original");
+        invoice(DOCUMENT, "R-1", Path.of("input/relative.pdf"), null);
+
+        final DeleteResult result = gateway().delete(DOCUMENT);
+
+        assertThat(result).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(original)).isFalse();
+    }
+
+    @Test
     void alreadyDeletedDocumentReturnsNotFound() {
         assertThat(gateway().delete(DOCUMENT)).isEqualTo(DeleteResult.NOT_FOUND);
     }
@@ -88,6 +163,17 @@ class SQLiteDocumentDeletionGatewayTest {
         assertThat(Files.exists(shared)).isTrue();
         assertThat(Files.exists(other)).isTrue();
         assertThat(count("invoices")).isEqualTo(1);
+        assertThat(count("processing_history")).isEqualTo(1);
+    }
+
+    @Test
+    void keepsFilesReferencedByRelativePathOfAnotherDocument() throws Exception {
+        final Path shared = Files.writeString(files.resolve("shared.pdf"), "shared");
+        invoice(DOCUMENT, "R-1", shared, null);
+        history(OTHER, Path.of("input/shared.pdf"));
+
+        assertThat(gateway().delete(DOCUMENT)).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(shared)).isTrue();
         assertThat(count("processing_history")).isEqualTo(1);
     }
 
@@ -158,6 +244,25 @@ class SQLiteDocumentDeletionGatewayTest {
     }
 
     @Test
+    void preparesFilePlanWhileDatabaseRowStillExists() throws Exception {
+        final Path original = Files.writeString(files.resolve("owned.pdf"), "owned");
+        invoice(DOCUMENT, "R-1", original, null);
+        final AtomicBoolean rowPresentDuringMove = new AtomicBoolean();
+        final SQLiteDocumentDeletionGateway gateway = new SQLiteDocumentDeletionGateway(database, List.of(files),
+                (source, target) -> {
+                    try {
+                        rowPresentDuringMove.set(count("invoices") == 1);
+                    } catch (SQLException exception) {
+                        throw new IOException(exception);
+                    }
+                    Files.move(source, target, StandardCopyOption.ATOMIC_MOVE);
+                });
+
+        assertThat(gateway.delete(DOCUMENT)).isEqualTo(DeleteResult.DELETED);
+        assertThat(rowPresentDuringMove).isTrue();
+    }
+
+    @Test
     void fileMoveFailureRestoresEarlierFileAndRows() throws Exception {
         final Path original = Files.writeString(files.resolve("owned.pdf"), "owned");
         final Path ocr = Files.writeString(files.resolve("ocr.pdf"), "ocr");
@@ -181,6 +286,27 @@ class SQLiteDocumentDeletionGatewayTest {
     }
 
     @Test
+    void cleanupFailureReportsPendingArtifactInsteadOfSuccess() throws Exception {
+        final Path original = Files.writeString(files.resolve("owned.pdf"), "owned");
+        invoice(DOCUMENT, "R-1", original, null);
+        final SQLiteDocumentDeletionGateway failing = new SQLiteDocumentDeletionGateway(database, List.of(files),
+                (source, target) -> Files.move(source, target, StandardCopyOption.ATOMIC_MOVE),
+                path -> {
+                    throw new IOException("injected cleanup failure");
+                });
+
+        final DeleteResult result = failing.delete(DOCUMENT);
+
+        assertThat(result).isEqualTo(DeleteResult.CLEANUP_PENDING);
+        assertThat(count("invoices")).isZero();
+        assertThat(Files.exists(original)).isFalse();
+        try (var paths = Files.list(files)) {
+            assertThat(paths.map(path -> path.getFileName().toString()))
+                    .anyMatch(name -> name.startsWith("owned.pdf.pending-delete-"));
+        }
+    }
+
+    @Test
     void activeDocumentCannotBeDeleted() throws Exception {
         final Path original = Files.writeString(files.resolve("active.pdf"), "active");
         state(DOCUMENT, original, null, "RETRY_PENDING");
@@ -199,10 +325,17 @@ class SQLiteDocumentDeletionGatewayTest {
 
     private void invoice(final String id, final String number, final Path original, final Path ocr)
             throws SQLException {
+        invoiceWithHash(id, number, original, ocr, UUID.randomUUID().toString());
+    }
+
+    private void invoiceWithHash(final String id, final String number, final Path original,
+                                 final Path ocr, final String hash) throws SQLException {
         insert("INSERT INTO invoices (document_id, original_path, ocr_path, document_type, original_filename, "
-                        + "file_hash, imported_at, invoice_number, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                        + "file_hash, imported_at, invoice_number, invoice_date, supplier_name, created_at) "
+                        + "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 id, original.toString(), ocr == null ? null : ocr.toString(), "INVOICE", number + ".pdf",
-                UUID.randomUUID().toString(), "2026-01-01T00:00:00Z", number, "2026-01-01T00:00:00Z");
+                hash, "2026-01-01T00:00:00Z", number, "2026-01-01", "Supplier",
+                "2026-01-01T00:00:00Z");
     }
 
     private void history(final String id, final Path original) throws SQLException {

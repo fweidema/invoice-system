@@ -312,6 +312,9 @@ public final class CockpitView extends VerticalLayout {
                 case CLEANUP_PENDING -> "Datensatz gelöscht; Dateibereinigung muss geprüft werden.";
             };
             showMessage(deleteMessage, text, result == CockpitApi.DeleteResult.CLEANUP_PENDING);
+            if (result == CockpitApi.DeleteResult.CLEANUP_PENDING) {
+                return;
+            }
             ++detailRequest;
             showDetail("Wähle eine Tabellenzeile aus.", List.of());
             refreshAll();

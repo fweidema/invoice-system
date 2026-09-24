@@ -111,4 +111,7 @@ Einzeldokument-Löschungen laufen über die interne DELETE-Route, den
 verbindet Rechnungen, Historie und Verarbeitungszustand; Dateipfade werden
 ausschließlich aus diesen Zeilen und konfigurierten Runtime-Wurzeln ermittelt.
 Die Datenbanklöschung ist transaktional und Dateiverschiebungen werden bei
-Fehlern vor Commit zurückgestellt. [Sicherheits- und Fehlerstrategie](codex-tasks/044-cockpit-delete-documents.md).
+Fehlern vor Commit zurückgestellt. Für archivierte Altdaten ohne gespeicherten
+Archivpfad ergänzt der API-Container den Löschplan vor der Transaktion aus
+Archivnaming und SHA-256-Prüfung. Die UI hat keine Archiv- oder OCR-Volumes.
+[Sicherheits- und Fehlerstrategie](codex-tasks/044-cockpit-delete-documents.md).

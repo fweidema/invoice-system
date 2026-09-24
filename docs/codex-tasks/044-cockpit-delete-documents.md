@@ -23,6 +23,14 @@ Rechnungsnummern sind änderbar und dienen nicht als Löschschlüssel.
 Persistierte Dateiverweise: `invoices.original_path`, `invoices.ocr_path`,
 `processing_history.original_path`, `processing_state.source_path`,
 `processing_state.ocr_output_path` und `processing_state.archive_path`.
+Beim Archivieren wird die Originaldatei verschoben. In älteren oder ohne
+`processing_state` entstandenen Datensätzen kann deshalb nur der inzwischen
+fehlende Input-Pfad stehen, obwohl die Ergebnisdatei im Archiv liegt. Der
+Löschplan muss diese Datei **vor** der Datenbanklöschung über Archivjahr,
+Lieferantenordner, Rechnungsdatum/-nummer und den gespeicherten SHA-256-Hash
+eindeutig bestimmen. Ein fremder Datensatz mit demselben Hash oder mehrere
+gleich passende Archivdateien führen zur Ablehnung statt zu einer Löschung
+mit unklarem Eigentum.
 Die konfigurierten erlaubten Wurzeln sind Input/Watch, Work, Manual Review,
 Error, Archive und OCR. Work-Dateien in einem eigenen `processing_id`-Ordner
 sind nicht einzeln persistiert; direkt darin liegende reguläre Dateien sind
@@ -42,6 +50,8 @@ Die View übergibt ausschließlich `document_id`, niemals einen Dateipfad.
 Pfade stammen ausschließlich aus persistierten Zeilen und konfigurierten
 Runtime-Wurzeln. Vor jeder Dateibewegung werden Pfad und Wurzel normalisiert,
 Containment, vorhandene Symlink-Komponenten und reguläre Dateien geprüft.
+Absolute Pfade werden direkt geprüft; relative persistierte Pfade werden nur
+bei eindeutiger Zuordnung gegen die konfigurierten Wurzeln aufgelöst.
 Wurzeln, Verzeichnisse, Datenbank und fremde Dokumente dürfen nicht gelöscht
 werden. Fehlende Dateien sind kontrolliert erlaubt. Aktive oder für Retry
 vorgesehene Zustände werden abgewiesen.
@@ -54,6 +64,14 @@ expliziter Fehler geloggt und zur manuellen Nachbearbeitung gemeldet. Ein
 Prozessabbruch zwischen Dateiverschiebung und Commit bleibt eine technische
 Grenze und erfordert Abgleich der Quarantänedateien mit einem DB-Backup.
 Logs enthalten nur Kennung und Ergebnis, keine Inhalte, OCR-Texte oder Secrets.
+Sie enthalten auch die Anzahl betroffener Artefakte. Die UI aktualisiert ihre
+Listen nach `CLEANUP_PENDING` nicht automatisch als erfolgreichen Abschluss.
+
+`invoice-worker-api` besitzt im Compose-Betrieb die Datenbank sowie Input,
+OCR, Work, Manual Review, Error und Archiv als Volumes und führt den Use Case
+aus. `invoice-worker-watch` verarbeitet dieselben Ablagen. `invoice-worker-ui`
+besitzt nur Input, Datenbank und Logs und führt keine Dateibereinigung aus.
+Es ist keine zusätzliche UI-Volume-Freigabe erforderlich.
 
 ## Umsetzung
 

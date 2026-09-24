@@ -206,7 +206,8 @@ public class InvoiceWorkerApplication {
                                 configuration.processing().errorDirectory(),
                                 configuration.archive().archiveDirectory(),
                                 configuration.ocr().outputDirectory()),
-                        configuration.processing().workDirectory())));
+                        configuration.processing().workDirectory(),
+                        configuration.archive().archiveDirectory())));
         Runtime.getRuntime().addShutdownHook(new Thread(apiServer::requestShutdown, "invoice-api-shutdown"));
         out.println("Invoice Worker API gestartet");
         out.println("Profil: " + options.profile().profileName());

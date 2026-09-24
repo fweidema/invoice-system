@@ -132,6 +132,21 @@ class CockpitViewTest {
         assertThat(view.invoiceGrid().getListDataView().getItems()).isEmpty();
     }
 
+    @Test
+    void incompleteFileCleanupDoesNotRefreshCockpitAsSuccessfulDeletion() {
+        final FakeApi api = new FakeApi();
+        api.deleteResult = CockpitApi.DeleteResult.CLEANUP_PENDING;
+        final CockpitView view = new CockpitView(api, Runnable::run);
+        view.confirmDeletion("doc-1");
+        final ConfirmDialog dialog = view.getChildren().filter(ConfirmDialog.class::isInstance)
+                .map(ConfirmDialog.class::cast).findFirst().orElseThrow();
+
+        ComponentUtil.fireEvent(dialog, new ConfirmDialog.ConfirmEvent(dialog, false));
+
+        assertThat(view.invoiceGrid().getListDataView().getItems()).containsExactly(INVOICE);
+        assertThat(view.deleteMessage().getText()).contains("muss geprüft werden");
+    }
+
     private static Button findButton(final Component root, final String label, final int occurrence) {
         return descendants(root).filter(Button.class::isInstance).map(Button.class::cast)
                 .filter(button -> label.equals(button.getText())).skip(occurrence).findFirst().orElseThrow();
@@ -149,6 +164,7 @@ class CockpitViewTest {
         private boolean paged;
         private boolean invoiceDetailRead;
         private boolean deleted;
+        private DeleteResult deleteResult = DeleteResult.DELETED;
 
         @Override
         public boolean healthy() {
@@ -187,8 +203,10 @@ class CockpitViewTest {
         @Override
         public DeleteResult deleteDocument(final String documentId) {
             deleted = true;
-            empty = true;
-            return DeleteResult.DELETED;
+            if (deleteResult == DeleteResult.DELETED) {
+                empty = true;
+            }
+            return deleteResult;
         }
     }
 }
