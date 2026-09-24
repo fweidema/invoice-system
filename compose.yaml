@@ -149,7 +149,7 @@ services:
     environment:
       INVOICE_UI_MANUAL_REVIEW_API_BASE_URI: ${INVOICE_UI_MANUAL_REVIEW_API_BASE_URI:-http://invoice-worker-api:8080/}
     ports:
-      - "127.0.0.1:${INVOICE_UI_PORT:-8081}:8081"
+      - "${INVOICE_UI_BIND_ADDRESS:-127.0.0.1}:${INVOICE_UI_PORT:-8081}:8081"
     volumes:
       - ./runtime/input:/data/input
       - ./runtime/database:/data/database
@@ -194,7 +194,7 @@ services:
       OAUTH2_PROXY_AUTH_LOGGING: "false"
       OAUTH2_PROXY_REQUEST_LOGGING: "false"
     ports:
-      - "127.0.0.1:4180:4180"
+      - "${OAUTH2_PROXY_BIND_ADDRESS:-127.0.0.1}:4180:4180"
     volumes:
       - ${OAUTH2_PROXY_ALLOWED_EMAILS_FILE:-./runtime/secrets/oauth2-allowed-emails}:/etc/oauth2-proxy/allowed-emails:ro
     read_only: true
