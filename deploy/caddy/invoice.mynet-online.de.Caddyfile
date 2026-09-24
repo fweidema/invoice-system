@@ -2,22 +2,22 @@
 # conflicting routes. Caddy alone owns public ports 80 and 443.
 invoice.mynet-online.de {
     handle /oauth2/* {
-        reverse_proxy 127.0.0.1:4180 {
+        reverse_proxy 100.125.118.22:4180 {
             header_up X-Real-IP {remote_host}
             header_up X-Forwarded-Uri {uri}
         }
     }
 
     handle {
-        forward_auth 127.0.0.1:4180 {
+        forward_auth 100.125.118.22:4180 {
             uri /oauth2/auth
             header_up X-Real-IP {remote_host}
             @unauthenticated status 401
             handle_response @unauthenticated {
-                redir /oauth2/start?rd={scheme}://{host}{uri}
+                redir * /oauth2/start?rd={scheme}://{host}{uri}
             }
         }
         # Caddy's reverse_proxy preserves Vaadin's WebSocket upgrade and streams uploads.
-        reverse_proxy 127.0.0.1:8081
+        reverse_proxy 100.125.118.22:8081
     }
 }
