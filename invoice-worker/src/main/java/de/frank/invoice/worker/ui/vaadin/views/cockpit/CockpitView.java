@@ -23,6 +23,7 @@ import com.vaadin.flow.server.VaadinSession;
 import com.vaadin.flow.shared.Registration;
 import de.frank.invoice.worker.ui.vaadin.MainLayout;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitApi;
+import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitApiException;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Invoice;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Money;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Page;
@@ -43,6 +44,8 @@ import java.util.concurrent.Executor;
 import java.util.concurrent.ForkJoinPool;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Native, read-only Vaadin cockpit using the existing internal monitoring API.
@@ -50,6 +53,7 @@ import java.util.function.Supplier;
 @Route(value = "cockpit", layout = MainLayout.class)
 @PageTitle("Cockpit")
 public final class CockpitView extends VerticalLayout {
+    private static final Logger LOG = LoggerFactory.getLogger(CockpitView.class);
     private static final int DEFAULT_PAGE_SIZE = 25;
     private static final int REFRESH_INTERVAL_MILLIS = 60_000;
     private static final Locale DISPLAY_LOCALE = Locale.GERMANY;
@@ -320,8 +324,32 @@ public final class CockpitView extends VerticalLayout {
             refreshAll();
         }, error -> {
             deleting = false;
-            showMessage(deleteMessage, "Dokument konnte nicht gelöscht werden. Daten bitte prüfen.", true);
+            final CockpitApiException apiError = deletionApiError(error);
+            final String code = apiError == null ? "UNAVAILABLE"
+                    : apiError.errorCode() == null ? "UNKNOWN" : apiError.errorCode();
+            LOG.warn("documentId={} deletionHttpStatus={} deletionErrorCode={}", documentId,
+                    apiError == null ? 0 : apiError.httpStatus(), code);
+            showMessage(deleteMessage, deletionErrorMessage(code), true);
         });
+    }
+
+    private static CockpitApiException deletionApiError(final Throwable failure) {
+        for (Throwable current = failure; current != null; current = current.getCause()) {
+            if (current instanceof CockpitApiException apiError) {
+                return apiError;
+            }
+        }
+        return null;
+    }
+
+    private static String deletionErrorMessage(final String code) {
+        return switch (code) {
+            case "ACTIVE" -> "Das Dokument wird noch verarbeitet oder ist für einen erneuten Versuch vorgesehen.";
+            case "UNSAFE_ARTIFACT" -> "Dokumentdateien konnten nicht eindeutig und sicher zugeordnet werden.";
+            case "FILE_FAILURE" -> "Dokumentdateien konnten nicht gelöscht werden. Daten bitte prüfen.";
+            case "DATABASE_FAILURE" -> "Datensätze konnten nicht gelöscht werden. Daten bitte prüfen.";
+            default -> "Dokument konnte nicht gelöscht werden. Daten bitte prüfen.";
+        };
     }
 
     private void invoicePage(final int requestedPage) {

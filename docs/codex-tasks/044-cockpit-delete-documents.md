@@ -52,9 +52,14 @@ Runtime-Wurzeln. Vor jeder Dateibewegung werden Pfad und Wurzel normalisiert,
 Containment, vorhandene Symlink-Komponenten und reguläre Dateien geprüft.
 Absolute Pfade werden direkt geprüft; relative persistierte Pfade werden nur
 bei eindeutiger Zuordnung gegen die konfigurierten Wurzeln aufgelöst.
+Fehlt ein relativer Pfad unter allen zulässigen Wurzeln, wird kein Pfad in den
+Löschplan aufgenommen. Mehrere vorhandene Treffer bleiben ein Sicherheitsfehler.
 Wurzeln, Verzeichnisse, Datenbank und fremde Dokumente dürfen nicht gelöscht
 werden. Fehlende Dateien sind kontrolliert erlaubt. Aktive oder für Retry
 vorgesehene Zustände werden abgewiesen.
+`MANUAL_REVIEW` wartet auf eine menschliche Entscheidung und ist kein aktiver
+oder geplanter automatischer Verarbeitungslauf; dieser Zustand darf gelöscht
+werden. `RETRY_PENDING` bleibt gesperrt.
 
 Dateien werden vor der Datenbanklöschung in Quarantänenamen im selben
 Verzeichnis verschoben. Scheitert eine Verschiebung oder die DB-Transaktion,
@@ -72,6 +77,9 @@ OCR, Work, Manual Review, Error und Archiv als Volumes und führt den Use Case
 aus. `invoice-worker-watch` verarbeitet dieselben Ablagen. `invoice-worker-ui`
 besitzt nur Input, Datenbank und Logs und führt keine Dateibereinigung aus.
 Es ist keine zusätzliche UI-Volume-Freigabe erforderlich.
+Fehlgeschlagene DELETE-Aufrufe liefern Status und einen stabilen API-Fehlercode.
+Die UI zeigt dafür feste, verständliche Meldungen und übernimmt weder Pfade
+noch beliebigen Antworttext aus der API.
 
 ## Umsetzung
 

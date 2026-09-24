@@ -97,6 +97,21 @@ class HttpCockpitApiTest {
         assertThat(api.deleteDocument("doc-1")).isEqualTo(CockpitApi.DeleteResult.NOT_FOUND);
     }
 
+    @Test
+    void deletionConflictRetainsStatusAndSafeErrorCode() {
+        server.createContext("/api/documents", exchange -> respond(exchange, 409, """
+                {"error":{"code":"UNSAFE_ARTIFACT","message":"/secret/path"}}"""));
+
+        assertThatThrownBy(() -> api.deleteDocument("doc-1"))
+                .isInstanceOf(CockpitApiException.class)
+                .satisfies(error -> {
+                    final CockpitApiException apiError = (CockpitApiException) error;
+                    assertThat(apiError.httpStatus()).isEqualTo(409);
+                    assertThat(apiError.errorCode()).isEqualTo("UNSAFE_ARTIFACT");
+                    assertThat(apiError.getMessage()).doesNotContain("/secret/path");
+                });
+    }
+
     private static void respond(final HttpExchange exchange, final int status, final String body)
             throws IOException {
         final byte[] content = body.getBytes(StandardCharsets.UTF_8);

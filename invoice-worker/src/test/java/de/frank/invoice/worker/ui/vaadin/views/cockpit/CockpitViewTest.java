@@ -5,6 +5,7 @@ import com.vaadin.flow.component.button.Button;
 import com.vaadin.flow.component.ComponentUtil;
 import com.vaadin.flow.component.confirmdialog.ConfirmDialog;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitApi;
+import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitApiException;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Invoice;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Money;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Page;
@@ -15,6 +16,7 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -147,6 +149,42 @@ class CockpitViewTest {
         assertThat(view.deleteMessage().getText()).contains("muss geprüft werden");
     }
 
+    @Test
+    void deletionFailureShowsSafeSpecificMessageWithoutRefreshing() {
+        final FakeApi api = new FakeApi();
+        api.deleteFailure = new CockpitApiException("safe", null, 409, "UNSAFE_ARTIFACT");
+        final CockpitView view = new CockpitView(api, Runnable::run);
+        view.confirmDeletion("doc-1");
+        final ConfirmDialog dialog = view.getChildren().filter(ConfirmDialog.class::isInstance)
+                .map(ConfirmDialog.class::cast).findFirst().orElseThrow();
+
+        ComponentUtil.fireEvent(dialog, new ConfirmDialog.ConfirmEvent(dialog, false));
+
+        assertThat(view.deleteMessage().getText()).contains("nicht eindeutig und sicher zugeordnet");
+        assertThat(view.invoiceGrid().getListDataView().getItems()).containsExactly(INVOICE);
+    }
+
+    @Test
+    void allDeletionFailureCodesHaveDistinctSafeMessages() {
+        final Map<String, String> expected = Map.of(
+                "ACTIVE", "noch verarbeitet",
+                "UNSAFE_ARTIFACT", "nicht eindeutig",
+                "FILE_FAILURE", "Dokumentdateien konnten nicht gelöscht",
+                "DATABASE_FAILURE", "Datensätze konnten nicht gelöscht");
+        for (final var entry : expected.entrySet()) {
+            final FakeApi api = new FakeApi();
+            api.deleteFailure = new CockpitApiException("safe", null, 409, entry.getKey());
+            final CockpitView view = new CockpitView(api, Runnable::run);
+            view.confirmDeletion("doc-1");
+            final ConfirmDialog dialog = view.getChildren().filter(ConfirmDialog.class::isInstance)
+                    .map(ConfirmDialog.class::cast).findFirst().orElseThrow();
+
+            ComponentUtil.fireEvent(dialog, new ConfirmDialog.ConfirmEvent(dialog, false));
+
+            assertThat(view.deleteMessage().getText()).contains(entry.getValue());
+        }
+    }
+
     private static Button findButton(final Component root, final String label, final int occurrence) {
         return descendants(root).filter(Button.class::isInstance).map(Button.class::cast)
                 .filter(button -> label.equals(button.getText())).skip(occurrence).findFirst().orElseThrow();
@@ -165,6 +203,7 @@ class CockpitViewTest {
         private boolean invoiceDetailRead;
         private boolean deleted;
         private DeleteResult deleteResult = DeleteResult.DELETED;
+        private CockpitApiException deleteFailure;
 
         @Override
         public boolean healthy() {
@@ -202,6 +241,9 @@ class CockpitViewTest {
 
         @Override
         public DeleteResult deleteDocument(final String documentId) {
+            if (deleteFailure != null) {
+                throw deleteFailure;
+            }
             deleted = true;
             if (deleteResult == DeleteResult.DELETED) {
                 empty = true;

@@ -29,6 +29,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
@@ -49,7 +50,6 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
             """;
     private static final Set<String> ACTIVE_STATUSES = Set.of("NEW", "RECEIVED", "OCR_RUNNING",
             "OCR_COMPLETED", "EXTRACTION_RUNNING", "EXTRACTION_COMPLETED", "RETRY_PENDING",
-            "MANUAL_REVIEW",
             "OCR_DONE", "TEXT_EXTRACTED", "AI_ANALYZED", "STORED");
     private static final Pattern SHA_256 = Pattern.compile("[0-9a-fA-F]{64}");
     private static final Pattern INVALID_ARCHIVE_CHARACTERS = Pattern.compile("[\\\\/:*?\"<>|]");
@@ -200,11 +200,13 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
     private List<Path> selectedFiles(final Connection connection, final List<ArtifactRow> selected,
                                      final List<ArtifactRow> all, final String documentId) throws SQLException {
         final LinkedHashSet<Path> candidates = new LinkedHashSet<>();
-        selected.forEach(row -> row.paths().stream().map(this::safePath).forEach(candidates::add));
+        selected.forEach(row -> row.paths().stream().map(this::safePath)
+                .flatMap(Optional::stream).forEach(candidates::add));
         final boolean explicitArchivePresent = selected.stream()
                 .map(ArtifactRow::archivePath)
                 .filter(path -> path != null && !path.isBlank())
                 .map(this::safePath)
+                .flatMap(Optional::stream)
                 .anyMatch(SQLiteDocumentDeletionGateway::presentRegularFile);
         if (archiveRoot != null && !explicitArchivePresent) {
             candidates.addAll(discoverArchivedFiles(connection, all, documentId));
@@ -222,7 +224,11 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
                 continue;
             }
             for (final String raw : row.paths()) {
-                final Path other = safePath(raw);
+                final Optional<Path> otherPath = safePath(raw);
+                if (otherPath.isEmpty()) {
+                    continue;
+                }
+                final Path other = otherPath.orElseThrow();
                 for (final Path candidate : candidates) {
                     if (candidate.equals(other)) {
                         shared.add(candidate);
@@ -286,7 +292,7 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
                             if (isArchiveFilename(candidate.getFileName().toString(), filenamePrefix)
                                     && presentRegularFile(candidate)
                                     && hash.equalsIgnoreCase(sha256(candidate))) {
-                                matching.add(safePath(candidate.toString()));
+                                matching.add(safePath(candidate.toString()).orElseThrow());
                             }
                         }
                     } catch (IOException exception) {
@@ -363,14 +369,14 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
                 if (!Files.isRegularFile(path, LinkOption.NOFOLLOW_LINKS)) {
                     throw new DocumentDeletionException(Code.UNSAFE_ARTIFACT, null);
                 }
-                return safePath(path.toString());
+                return safePath(path.toString()).orElseThrow();
             }).toList();
         } catch (IOException exception) {
             throw new DocumentDeletionException(Code.FILE_FAILURE, exception);
         }
     }
 
-    private Path safePath(final String raw) {
+    private Optional<Path> safePath(final String raw) {
         final Path original;
         try {
             original = Path.of(raw);
@@ -383,7 +389,7 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
             }
         }
         if (original.isAbsolute()) {
-            return safeAbsolutePath(original);
+            return Optional.of(safeAbsolutePath(original));
         }
         final List<Path> namedRoots = roots.stream()
                 .filter(root -> root.getFileName() != null
@@ -400,12 +406,13 @@ public final class SQLiteDocumentDeletionGateway implements DocumentDeletionGate
             }
         }
         if (existing.size() == 1) {
-            return existing.getFirst();
+            return Optional.of(existing.getFirst());
         }
-        if (existing.size() > 1 || possibleRoots.size() != 1) {
+        if (existing.size() > 1) {
             throw new DocumentDeletionException(Code.UNSAFE_ARTIFACT, null);
         }
-        return safeAbsolutePath(possibleRoots.getFirst().resolve(relative));
+        // A missing relative path has no file identity; guessing a root could select a later foreign file.
+        return Optional.empty();
     }
 
     private Path safeAbsolutePath(final Path original) {

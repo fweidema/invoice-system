@@ -65,6 +65,11 @@ Wenn der gespeicherte Originalpfad nach der Archivierung fehlt, sucht die API
 die Ergebnisdatei im konfigurierten Archiv anhand des erwarteten Ablageorts
 und prüft ihren SHA-256-Hash vor dem Löschen. Relative Altpfade werden nur
 innerhalb eindeutig zuordenbarer Runtime-Wurzeln aufgelöst.
+Fehlende relative Dateien blockieren die Löschung nicht; bei mehreren
+vorhandenen Treffern wird sie aus Sicherheitsgründen abgelehnt. Das Cockpit
+zeigt getrennte Meldungen für laufende Verarbeitung, unsichere Dateizuordnung,
+Dateisystem- und Datenbankfehler. `MANUAL_REVIEW` ist als ruhender Zustand
+löschbar, ein geplanter Retry dagegen nicht.
 
 Die View zeigt keine Live-Ereignisse zwischen den
 60-Sekunden-Aktualisierungen. Eine bereits geöffnete Detailansicht bleibt

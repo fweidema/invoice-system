@@ -1,6 +1,7 @@
 package de.frank.invoice.worker.ui.vaadin.cockpit;
 
 import com.fasterxml.jackson.databind.JavaType;
+import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.DeserializationFeature;
 import de.frank.invoice.worker.ui.vaadin.cockpit.CockpitModels.Invoice;
@@ -19,6 +20,7 @@ import java.time.Duration;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 
 /**
  * HTTP adapter for internal cockpit endpoints.
@@ -26,6 +28,8 @@ import java.util.Objects;
 public final class HttpCockpitApi implements CockpitApi {
     private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(5);
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(15);
+    private static final Set<String> DELETION_ERROR_CODES = Set.of("ACTIVE", "UNSAFE_ARTIFACT",
+            "FILE_FAILURE", "DATABASE_FAILURE", "INVALID_ID", "DOCUMENT_NOT_FOUND");
 
     private final URI baseUri;
     private final HttpClient client;
@@ -80,12 +84,12 @@ public final class HttpCockpitApi implements CockpitApi {
         final HttpRequest request = HttpRequest.newBuilder(baseUri.resolve("api/documents/" + encode(documentId)))
                 .timeout(REQUEST_TIMEOUT).DELETE().build();
         try {
-            final HttpResponse<Void> response = client.send(request, HttpResponse.BodyHandlers.discarding());
+            final HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
             return switch (response.statusCode()) {
                 case 200 -> DeleteResult.DELETED;
                 case 202 -> DeleteResult.CLEANUP_PENDING;
                 case 404 -> DeleteResult.NOT_FOUND;
-                default -> throw new CockpitApiException("Dokument konnte nicht gelöscht werden.", null);
+                default -> throw deletionFailure(response);
             };
         } catch (IOException exception) {
             throw new CockpitApiException("Dokument konnte nicht gelöscht werden.", exception);
@@ -93,6 +97,23 @@ public final class HttpCockpitApi implements CockpitApi {
             Thread.currentThread().interrupt();
             throw new CockpitApiException("Dokument konnte nicht gelöscht werden.", exception);
         }
+    }
+
+    private CockpitApiException deletionFailure(final HttpResponse<byte[]> response) {
+        String code = null;
+        try {
+            final JsonNode body = mapper.readTree(response.body());
+            if (body != null) {
+                final String candidate = body.path("error").path("code").asText();
+                if (DELETION_ERROR_CODES.contains(candidate)) {
+                    code = candidate;
+                }
+            }
+        } catch (IOException exception) {
+            // A malformed response must never become a user-visible message.
+        }
+        return new CockpitApiException("Dokument konnte nicht gelöscht werden.", null,
+                response.statusCode(), code);
     }
 
     private JavaType pageType(final Class<?> itemType) {

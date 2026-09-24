@@ -152,6 +152,64 @@ class SQLiteDocumentDeletionGatewayTest {
     }
 
     @Test
+    void missingRelativeArtifactWithSeveralRootsDoesNotBlockDeletion() throws Exception {
+        final Path archive = Files.createDirectory(temp.resolve("archive"));
+        invoice(DOCUMENT, "R-1", Path.of("missing.pdf"), null);
+
+        assertThat(new SQLiteDocumentDeletionGateway(database, List.of(files, archive))
+                .delete(DOCUMENT)).isEqualTo(DeleteResult.DELETED);
+        assertThat(count("invoices")).isZero();
+    }
+
+    @Test
+    void missingRelativeInputStillAllowsVerifiedArchiveDeletion() throws Exception {
+        final Path archiveRoot = temp.resolve("archive");
+        final Path archived = Files.writeString(Files.createDirectories(
+                archiveRoot.resolve("2026/Supplier")).resolve("2026-01-01_R-1.pdf"), "archived");
+        final String hash = HexFormat.of().formatHex(MessageDigest.getInstance("SHA-256")
+                .digest(Files.readAllBytes(archived)));
+        invoiceWithHash(DOCUMENT, "R-1", Path.of("missing.pdf"), null, hash);
+
+        assertThat(new SQLiteDocumentDeletionGateway(database, List.of(files, archiveRoot),
+                null, archiveRoot).delete(DOCUMENT)).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(archived)).isFalse();
+    }
+
+    @Test
+    void ambiguousExistingRelativeArtifactIsRejected() throws Exception {
+        final Path archive = Files.createDirectory(temp.resolve("archive"));
+        Files.writeString(files.resolve("shared.pdf"), "first");
+        Files.writeString(archive.resolve("shared.pdf"), "second");
+        invoice(DOCUMENT, "R-1", Path.of("shared.pdf"), null);
+
+        assertThatThrownBy(() -> new SQLiteDocumentDeletionGateway(database, List.of(files, archive))
+                .delete(DOCUMENT)).isInstanceOf(DocumentDeletionException.class)
+                .extracting(error -> ((DocumentDeletionException) error).code())
+                .isEqualTo(DocumentDeletionException.Code.UNSAFE_ARTIFACT);
+        assertThat(count("invoices")).isEqualTo(1);
+    }
+
+    @Test
+    void uniqueExistingRelativeArtifactWithSeveralRootsIsDeleted() throws Exception {
+        final Path archive = Files.createDirectory(temp.resolve("archive"));
+        final Path original = Files.writeString(files.resolve("unique.pdf"), "owned");
+        invoice(DOCUMENT, "R-1", Path.of("unique.pdf"), null);
+
+        assertThat(new SQLiteDocumentDeletionGateway(database, List.of(files, archive))
+                .delete(DOCUMENT)).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(original)).isFalse();
+    }
+
+    @Test
+    void manualReviewStateCanBeDeleted() throws Exception {
+        final Path original = Files.writeString(files.resolve("review.pdf"), "review");
+        state(DOCUMENT, original, null, "MANUAL_REVIEW");
+
+        assertThat(gateway().delete(DOCUMENT)).isEqualTo(DeleteResult.DELETED);
+        assertThat(Files.exists(original)).isFalse();
+    }
+
+    @Test
     void keepsFilesReferencedByAnotherDocument() throws Exception {
         final Path shared = Files.writeString(files.resolve("shared.pdf"), "shared");
         final Path other = Files.writeString(files.resolve("other.pdf"), "other");
