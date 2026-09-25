@@ -244,6 +244,41 @@ class DocumentProcessingWorkflowTest {
     }
 
     @Test
+    void processStopsBeforeAiAnalysisWhenExtractedTextIsBlank() {
+        // Arrange
+        final CountingInvoiceRepository invoiceRepository = new CountingInvoiceRepository();
+        final RecordingProcessingStateRepository stateRepository = new RecordingProcessingStateRepository();
+        final DocumentProcessingWorkflow workflow = new DocumentProcessingWorkflow(
+                ocrStep(),
+                blankTextExtractionStep(),
+                requestFactory(),
+                request -> {
+                    throw new IllegalStateException("AI must not be called");
+                },
+                new InvoiceExtractionResponseMapper(),
+                new InvoiceMapper(),
+                new InvoiceValidator(),
+                new DuplicateDetector(invoiceRepository),
+                invoiceRepository,
+                new CountingArchiveService(),
+                de.frank.invoice.worker.application.persistence.ProcessingHistoryRepository.NO_OP,
+                Clock.fixed(Instant.parse("2026-06-27T10:00:00Z"), ZoneOffset.UTC),
+                stateTracker(stateRepository));
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(result.successful()).isFalse();
+        assertThat(result.persisted()).isFalse();
+        assertThat(result.messages()).contains("Text extraction failed: no valid output text extracted from PDF");
+        assertThat(stateRepository.states())
+                .last()
+                .extracting(ProcessingState::lastErrorCode)
+                .isEqualTo(de.frank.invoice.worker.domain.processing.ProcessingErrorCode.OCR_OUTPUT_MISSING);
+    }
+
+    @Test
     void processHandlesDuplicateDetectorException() {
         // Arrange
         final CountingInvoiceRepository repository = new CountingInvoiceRepository();
@@ -347,6 +382,15 @@ class DocumentProcessingWorkflowTest {
             @Override
             public ExtractedDocument process(final Document input) {
                 return new ExtractedDocument(input, "OCR invoice text", 1, "deu", true);
+            }
+        };
+    }
+
+    private TextExtractionStep blankTextExtractionStep() {
+        return new TextExtractionStep(new PdfTextExtractor()) {
+            @Override
+            public ExtractedDocument process(final Document input) {
+                return new ExtractedDocument(input, " ", 1, "deu", true);
             }
         };
     }
@@ -490,6 +534,10 @@ class DocumentProcessingWorkflowTest {
 
         private List<ProcessingStatus> statuses() {
             return states.stream().map(ProcessingState::status).toList();
+        }
+
+        private List<ProcessingState> states() {
+            return List.copyOf(states);
         }
     }
 }

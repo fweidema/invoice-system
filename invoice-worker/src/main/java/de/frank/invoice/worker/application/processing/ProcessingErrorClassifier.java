@@ -38,6 +38,9 @@ public class ProcessingErrorClassifier {
         if (message.contains("corrupt")) {
             return ProcessingErrorCode.PDF_CORRUPTED;
         }
+        if (message.contains("no valid output")) {
+            return ProcessingErrorCode.OCR_OUTPUT_MISSING;
+        }
         if (message.contains("invalid") || message.contains("empty response") || message.contains("incomplete response")) {
             return ProcessingErrorCode.OPENAI_INVALID_RESPONSE;
         }
@@ -45,8 +48,7 @@ public class ProcessingErrorClassifier {
             return ProcessingErrorCode.TEMPORARY_IO_ERROR;
         }
         return switch (stage) {
-            case OCR -> message.contains("no valid output")
-                    ? ProcessingErrorCode.OCR_OUTPUT_MISSING : ProcessingErrorCode.OCR_FAILED;
+            case OCR -> ProcessingErrorCode.OCR_FAILED;
             case EXTRACTION -> ProcessingErrorCode.EXTRACTION_FAILED;
             case DATABASE_READ -> ProcessingErrorCode.DATABASE_READ_FAILED;
             case DATABASE_WRITE -> ProcessingErrorCode.DATABASE_WRITE_FAILED;

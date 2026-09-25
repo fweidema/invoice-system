@@ -27,4 +27,12 @@ class ProcessingErrorClassifierTest {
         assertThat(classifier.classify(ProcessingStage.OCR, new RuntimeException("no valid output")))
                 .isEqualTo(ProcessingErrorCode.OCR_OUTPUT_MISSING);
     }
+
+    @Test
+    void classifiesBlankExtractedPdfTextAsMissingOcrOutput() {
+        assertThat(classifier.classify(
+                ProcessingStage.EXTRACTION,
+                new RuntimeException("no valid output text extracted from PDF")))
+                .isEqualTo(ProcessingErrorCode.OCR_OUTPUT_MISSING);
+    }
 }

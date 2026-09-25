@@ -240,6 +240,7 @@ public class DocumentProcessingWorkflow {
                     state = stateTracker.transition(state, ProcessingStatus.EXTRACTION_RUNNING, null, null);
                 }
                 extractedDocument = textExtractionStep.process(ocrDocument);
+                requireExtractedText(extractedDocument);
             } catch (RuntimeException exception) {
                 if (stateTracker != null) {
                     state = stateTracker.fail(state, ProcessingStage.EXTRACTION, exception);
@@ -430,6 +431,12 @@ public class DocumentProcessingWorkflow {
 
     private DocumentProcessingResult failedResult(final List<String> messages, final ProcessingStatus status) {
         return result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, null, messages, null, status);
+    }
+
+    private void requireExtractedText(final ExtractedDocument document) {
+        if (document.extractedText().isBlank()) {
+            throw new IllegalStateException("no valid output text extracted from PDF");
+        }
     }
 
     private DocumentProcessingResult result(
