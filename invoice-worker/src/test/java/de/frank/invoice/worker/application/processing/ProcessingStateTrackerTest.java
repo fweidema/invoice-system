@@ -4,6 +4,7 @@ import de.frank.invoice.worker.application.configuration.ProcessingConfiguration
 import de.frank.invoice.worker.application.persistence.ProcessingStateRepository;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
+import de.frank.invoice.worker.domain.processing.ProcessingErrorCode;
 import de.frank.invoice.worker.domain.processing.ProcessingStage;
 import de.frank.invoice.worker.domain.processing.ProcessingState;
 import de.frank.invoice.worker.domain.processing.ProcessingStatus;
@@ -68,6 +69,28 @@ class ProcessingStateTrackerTest {
     }
 
     @Test
+    void validationFailureMovesSourceToManualReviewAndStoresStableError() throws Exception {
+        final InMemoryStateRepository repository = new InMemoryStateRepository();
+        final ProcessingStateTracker tracker = tracker(repository, NOW);
+        Files.writeString(Path.of(document().originalPath()), "%PDF");
+        ProcessingState state = tracker.admit(document()).state();
+        state = tracker.transition(state, ProcessingStatus.OCR_RUNNING, null, null);
+        state = tracker.transition(state, ProcessingStatus.OCR_COMPLETED, "/work/ocr.pdf", null);
+        state = tracker.transition(state, ProcessingStatus.EXTRACTION_RUNNING, null, null);
+
+        final ProcessingState failed = tracker.fail(
+                state,
+                ProcessingErrorCode.VALIDATION_FAILED,
+                "Invoice validation failed.");
+
+        assertThat(failed.status()).isEqualTo(ProcessingStatus.MANUAL_REVIEW);
+        assertThat(failed.lastErrorCode()).isEqualTo(ProcessingErrorCode.VALIDATION_FAILED);
+        assertThat(failed.lastErrorMessage()).isEqualTo("Invoice validation failed.");
+        assertThat(Path.of(failed.sourcePath())).exists().isRegularFile();
+        assertThat(Path.of(document().originalPath())).doesNotExist();
+    }
+
+    @Test
     void manualReviewIsNotAdmittedForAutomaticProcessing() {
         final InMemoryStateRepository repository = new InMemoryStateRepository();
         final ProcessingStateTracker tracker = tracker(repository, NOW);
@@ -127,6 +150,22 @@ class ProcessingStateTrackerTest {
 
         assertThat(admission.process()).isFalse();
         assertThat(admission.duplicate()).isTrue();
+    }
+
+    @Test
+    void sameHashAliasCannotTakeOverOpenReviewCase() {
+        final InMemoryStateRepository repository = new InMemoryStateRepository();
+        final ProcessingState existing = state(ProcessingStatus.MANUAL_REVIEW, 1);
+        repository.save(existing);
+        final Document alias = new Document("alias-id", document().originalPath(), null,
+                DocumentType.UNKNOWN, "alias.pdf", document().fileHash(), NOW);
+
+        final ProcessingStateTracker.ProcessingAdmission admission = tracker(repository, NOW).admit(alias);
+
+        assertThat(admission.process()).isFalse();
+        assertThat(admission.duplicate()).isTrue();
+        assertThat(admission.state()).isSameAs(existing);
+        assertThat(repository.saveCount()).isEqualTo(1);
     }
 
     @Test

@@ -67,11 +67,16 @@ public record ManualReviewResponse(
                 || status == ProcessingStatus.RETRY_PENDING) {
             actions.add("complete");
         }
-        if (status != ProcessingStatus.RETRY_PENDING && status != ProcessingStatus.MANUALLY_COMPLETED) {
+        if (status == ProcessingStatus.MANUAL_REVIEW || status == ProcessingStatus.FAILED) {
             actions.add("retry");
         }
-        if (reviewCase.invoice() != null && reviewCase.state().archivePath() == null) {
+        if (reviewCase.invoice() != null && (status == ProcessingStatus.MANUAL_REVIEW
+                || status == ProcessingStatus.FAILED || status == ProcessingStatus.RETRY_PENDING)
+                && reviewCase.state().archivePath() == null) {
             actions.add("archive");
+        }
+        if ((status == ProcessingStatus.MANUAL_REVIEW || status == ProcessingStatus.FAILED
+                || status == ProcessingStatus.RETRY_PENDING) && reviewCase.state().archivePath() == null) {
             actions.add("correctInvoice");
         }
         if (reviewCase.state().ocrOutputPath() != null) {

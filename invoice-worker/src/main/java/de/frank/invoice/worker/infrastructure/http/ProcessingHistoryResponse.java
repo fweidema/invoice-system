@@ -9,6 +9,7 @@ record ProcessingHistoryResponse(
         String originalFilename,
         String fileHash,
         String status,
+        String currentStatus,
         boolean successful,
         boolean persisted,
         boolean duplicateDetected,
@@ -20,11 +21,16 @@ record ProcessingHistoryResponse(
         long durationMillis) {
 
     static ProcessingHistoryResponse from(final ProcessingHistoryEntry entry) {
+        return from(entry, null);
+    }
+
+    static ProcessingHistoryResponse from(final ProcessingHistoryEntry entry, final String currentStatus) {
         return new ProcessingHistoryResponse(
                 entry.documentId(),
                 entry.originalFilename(),
                 entry.fileHash(),
                 entry.status().name(),
+                currentStatus,
                 entry.successful(),
                 entry.persisted(),
                 entry.duplicateDetected(),

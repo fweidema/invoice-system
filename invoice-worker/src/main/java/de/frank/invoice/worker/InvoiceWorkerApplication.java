@@ -191,8 +191,10 @@ public class InvoiceWorkerApplication {
         	configuration.processing().errorDirectory(),
         	configuration.archive().archiveDirectory(),
         	configuration.ocr().outputDirectory())
-        	.collect(Collectors.toCollection(LinkedHashSet::new)),
-                Clock.systemUTC());
+                .collect(Collectors.toCollection(LinkedHashSet::new)),
+                Clock.systemUTC(),
+                new de.frank.invoice.worker.infrastructure.persistence.sqlite.SQLiteReviewInvoiceWriter(
+                        configuration.persistence().databaseFile()));
         final ReadOnlyApiServer apiServer = new ReadOnlyApiServer(
                 apiConfiguration,
                 invoiceRepository,

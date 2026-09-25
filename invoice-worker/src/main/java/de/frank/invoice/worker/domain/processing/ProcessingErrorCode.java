@@ -15,6 +15,7 @@ public enum ProcessingErrorCode {
     OPENAI_RATE_LIMIT(ProcessingErrorClass.RETRYABLE),
     OPENAI_SERVER_ERROR(ProcessingErrorClass.RETRYABLE),
     OPENAI_INVALID_RESPONSE(ProcessingErrorClass.MANUAL_REVIEW),
+    VALIDATION_FAILED(ProcessingErrorClass.MANUAL_REVIEW),
     DATABASE_READ_FAILED(ProcessingErrorClass.RETRYABLE),
     DATABASE_WRITE_FAILED(ProcessingErrorClass.RETRYABLE),
     SOURCE_FILE_MISSING(ProcessingErrorClass.MANUAL_REVIEW),

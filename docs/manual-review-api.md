@@ -28,6 +28,13 @@ Verfügbarkeitsmerkmale und mögliche Aktionen.
 PATCH akzeptiert nur `vendor`, `invoiceNumber`, `invoiceDate`, `amount`,
 `currency` und `category`. Datum, Betrag, ISO-4217-Währung und `DocumentType`
 werden feldbezogen validiert. Technische Felder sind nicht im Request-DTO.
+Wenn zum Datei-Hash noch keine Rechnung existiert, müssen alle sechs fachlichen
+Felder gültig übergeben werden. Dokumentkennung, Hash, Dateiname, Quell- und
+OCR-Pfad stammen dann allein aus `processing_state`. Die neue Rechnung erhält
+das Ereignis `INVOICE_CREATED`; Änderungen an vorhandenen Rechnungen behalten
+`INVOICE_CORRECTED`. Der produktive SQLite-Schreibpfad hält Versionsprüfung,
+Rechnung und Ereignis in einer Transaktion. Eine doppelte Rechnungsnummer wird
+feldbezogen abgelehnt, ein veralteter Stand mit HTTP 409.
 
 Jede Mutation benötigt den zuletzt gelesenen `updatedAt`-Wert:
 
@@ -42,8 +49,11 @@ Status, technischen Kommentar und geänderte Feldnamen.
 Retry setzt den Fall ohne langen HTTP-Request sofort auf `RETRY_PENDING`;
 Maximalversuche bleiben verbindlich. Der nächste Batch-/Watch-Durchlauf nutzt
 ein vorhandenes OCR-Artefakt. Archive lädt ausschließlich die persistierte
-Rechnung und startet weder OCR noch OpenAI. Complete setzt
-`MANUALLY_COMPLETED`, nicht `ARCHIVED`.
+Rechnung und startet weder OCR noch OpenAI. Nach erfolgreichem Speichern kann
+die bestehende Archivierungsaktion den Zustand auf `ARCHIVED` setzen; damit
+verschwindet der Fall aus der offenen Nachbearbeitung. **Ohne Rechnung
+abschließen** setzt `MANUALLY_COMPLETED`, erzeugt keine Rechnung und archiviert
+keine Datei.
 
 ## Dateien und Datenschutz
 

@@ -40,7 +40,7 @@ public class SQLiteProcessingEventRepository implements ProcessingEventRepositor
             CREATE INDEX IF NOT EXISTS idx_processing_events_processing_id
             ON processing_events(processing_id, event_at, id)
             """;
-    private static final String INSERT = """
+    static final String INSERT = """
             INSERT INTO processing_events (
                 processing_id, event_at, event_type, from_status, to_status,
                 error_code, message, changed_fields
@@ -76,18 +76,23 @@ public class SQLiteProcessingEventRepository implements ProcessingEventRepositor
     public void save(final String processingId, final ProcessingEvent event) {
         try (Connection connection = connectionFactory.openConnection();
              PreparedStatement statement = connection.prepareStatement(INSERT)) {
-            statement.setString(1, processingId);
-            statement.setString(2, event.timestamp().toString());
-            statement.setString(3, event.eventType().name());
-            statement.setString(4, name(event.fromStatus()));
-            statement.setString(5, name(event.toStatus()));
-            statement.setString(6, name(event.errorCode()));
-            statement.setString(7, event.message());
-            statement.setString(8, String.join(",", event.changedFields()));
+            bindInsert(statement, processingId, event);
             statement.executeUpdate();
         } catch (SQLException exception) {
             throw new PersistenceException("Could not save processing event", exception);
         }
+    }
+
+    static void bindInsert(final PreparedStatement statement, final String processingId,
+                           final ProcessingEvent event) throws SQLException {
+        statement.setString(1, processingId);
+        statement.setString(2, event.timestamp().toString());
+        statement.setString(3, event.eventType().name());
+        statement.setString(4, name(event.fromStatus()));
+        statement.setString(5, name(event.toStatus()));
+        statement.setString(6, name(event.errorCode()));
+        statement.setString(7, event.message());
+        statement.setString(8, String.join(",", event.changedFields()));
     }
 
     @Override
@@ -114,7 +119,7 @@ public class SQLiteProcessingEventRepository implements ProcessingEventRepositor
         }
     }
 
-    private String name(final Enum<?> value) {
+    private static String name(final Enum<?> value) {
         return value == null ? null : value.name();
     }
 

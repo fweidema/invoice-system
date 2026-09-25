@@ -84,6 +84,33 @@ class CockpitViewTest {
     }
 
     @Test
+    void processingDetailKeepsHistoricalResultAndDisplaysMissingCurrentStatus() {
+        final CockpitView view = new CockpitView(new FakeApi(), Runnable::run);
+
+        view.historyGrid().select(HISTORY);
+
+        final List<String> lines = view.detail().getChildren().map(Component::getElement)
+                .map(element -> element.getText()).toList();
+        assertThat(lines).anyMatch(text -> text.contains("Verarbeitungsergebnis: SUCCESS"));
+        assertThat(lines).anyMatch(text -> text.contains("Aktueller Status: –"));
+    }
+
+    @Test
+    void processingDetailDisplaysCurrentStateSeparatelyFromHistoricalResult() {
+        final FakeApi api = new FakeApi();
+        api.processingDetail = new Processing("doc-1", "rechnung.pdf", "MANUAL_REVIEW",
+                false, false, false, null, "2026-07-01T10:00:00Z", "2026-07-01T10:00:01Z",
+                1000, null, "MANUALLY_COMPLETED");
+        final CockpitView view = new CockpitView(api, Runnable::run);
+
+        view.historyGrid().select(HISTORY);
+
+        assertThat(view.detail().getChildren().map(Component::getElement).map(element -> element.getText()))
+                .anyMatch(text -> text.contains("Verarbeitungsergebnis: MANUAL_REVIEW"))
+                .anyMatch(text -> text.contains("Aktueller Status: MANUALLY_COMPLETED"));
+    }
+
+    @Test
     void cancelDialogDoesNotDeleteDocument() {
         final FakeApi api = new FakeApi();
         final CockpitView view = new CockpitView(api, Runnable::run);
@@ -204,6 +231,7 @@ class CockpitViewTest {
         private boolean deleted;
         private DeleteResult deleteResult = DeleteResult.DELETED;
         private CockpitApiException deleteFailure;
+        private Processing processingDetail = HISTORY;
 
         @Override
         public boolean healthy() {
@@ -236,7 +264,7 @@ class CockpitViewTest {
 
         @Override
         public Processing processing(final String documentId) {
-            return HISTORY;
+            return processingDetail;
         }
 
         @Override

@@ -52,6 +52,9 @@ public class ProcessingStateTracker {
         final Optional<ProcessingState> existing = repository.findByFileHash(document.fileHash());
         if (existing.isPresent()) {
             final ProcessingState state = existing.orElseThrow();
+            if (!state.documentId().equals(document.id())) {
+                return new ProcessingAdmission(state, false, true);
+            }
             if (state.status() == ProcessingStatus.ARCHIVED || state.status() == ProcessingStatus.DUPLICATE) {
                 return new ProcessingAdmission(state, false, true);
             }
@@ -97,6 +100,23 @@ public class ProcessingStateTracker {
             final ProcessingStage stage,
             final RuntimeException failure) {
         final ProcessingErrorCode errorCode = errorClassifier.classify(stage, failure);
+        return fail(current, errorCode, failure.getMessage());
+    }
+
+    /**
+     * Records a processing failure with an already classified stable error code.
+     *
+     * @param current current durable processing state
+     * @param errorCode stable error code used for retry and routing decisions
+     * @param failureMessage non-sensitive failure summary
+     * @return updated durable processing state
+     */
+    public ProcessingState fail(
+            final ProcessingState current,
+            final ProcessingErrorCode errorCode,
+            final String failureMessage) {
+        Objects.requireNonNull(current, "current must not be null");
+        Objects.requireNonNull(errorCode, "errorCode must not be null");
         final RetryPolicy.RetryDecision decision = retryPolicy.decide(errorCode, current.processingAttempts());
         if (current.status() == ProcessingStatus.MANUAL_REVIEW
                 && decision.status() == ProcessingStatus.MANUAL_REVIEW) {
@@ -108,7 +128,7 @@ public class ProcessingStateTracker {
         final ProcessingState updated = new ProcessingState(
                 current.processingId(), current.documentId(), current.fileHash(), current.sourceFilename(),
                 retainedSourcePath, decision.status(), current.processingAttempts(), errorCode,
-                truncate(failure.getMessage()), now, decision.nextRetryAt(), current.processingStartedAt(),
+                truncate(failureMessage), now, decision.nextRetryAt(), current.processingStartedAt(),
                 decision.status() == ProcessingStatus.FAILED || decision.status() == ProcessingStatus.MANUAL_REVIEW
                         ? now : null,
                 current.ocrOutputPath(), current.archivePath(), now);

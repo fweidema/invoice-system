@@ -193,6 +193,14 @@ wechseln nach `RETRY_PENDING`; nach dem vierten erfolglosen Versuch oder bei
 fachlich unklaren Dokumenten folgt `MANUAL_REVIEW`, permanente technische
 Fehler enden in `FAILED`.
 
+Ein fachlicher Validierungsfehler kann unmittelbar `MANUAL_REVIEW` auslösen,
+ohne eine Rechnung zu speichern. Die Nachbearbeitung kann aus vollständig
+validierten Feldern eine Rechnung anlegen und diese anschließend regulär
+archivieren. Pro Datei-Hash existiert nur ein aktueller `processing_state`;
+weitere Dokumentkennungen mit demselben Hash bilden keinen zweiten offenen
+Nachbearbeitungsfall. Bestehende Laufzeitdaten werden dabei nicht automatisch
+repariert oder migriert.
+
 `processing.retryDelays` enthaelt je erneutem Versuch eine positive Dauer. Der
 Default `1m,5m,30m` bedeutet insgesamt hoechstens vier Versuche. Ein Neustart
 liest denselben Zustand ueber den SHA-256-Hash wieder ein. Vorhandene

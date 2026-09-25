@@ -15,6 +15,11 @@ public interface ProcessingStateRepository {
 
     Optional<ProcessingState> findByFileHash(String fileHash);
 
+    /** Finds the current state only when this document owns the processing case. */
+    default Optional<ProcessingState> findByDocumentId(final String documentId) {
+        return findAll().stream().filter(state -> state.documentId().equals(documentId)).findFirst();
+    }
+
     default Optional<ProcessingState> findByProcessingId(final String processingId) {
         return findAll().stream().filter(state -> state.processingId().equals(processingId)).findFirst();
     }

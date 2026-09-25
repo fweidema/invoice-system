@@ -87,6 +87,16 @@ class ManualReviewViewTest {
     }
 
     @Test
+    void completionWithoutInvoiceHasExplicitLabel() {
+        final FakeApi api = new FakeApi();
+        final ManualReviewDetailDialog dialog = new ManualReviewDetailDialog(api, api.item, () -> { });
+
+        assertThat(dialog.completeButton().getText()).isEqualTo("Ohne Rechnung abschließen");
+        assertThat(dialog.completionConfirmationText())
+                .contains("keine Rechnung erzeugt", "Dokument nicht archiviert");
+    }
+
+    @Test
     void originalDownloadIsConfiguredWithoutEagerlyReadingDocument() {
         final FakeApi api = new FakeApi();
 

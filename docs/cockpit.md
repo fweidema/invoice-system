@@ -33,8 +33,12 @@ Review (`ui.manualReviewApiBaseUri`, im Docker-Netz
 API-Route. Verwendet werden die bestehenden Lese-Endpunkte `/api/health`,
 `/api/invoices`, `/api/invoices/{invoiceNumber}`,
 `/api/processing-history` und `/api/processing-history/{documentId}`.
-API-Verträge, Filterlogik und Datenbankabfragen wurden für die Integration
-nicht geändert.
+Die Processing-History-Antwort enthält zusätzlich den optionalen
+`currentStatus` aus `processing_state`, sofern die Dokumentkennung den aktuellen
+Fall besitzt. Das Cockpit zeigt das historische **Verarbeitungsergebnis** und
+den **Aktuellen Status** getrennt; fehlt der aktuelle Zustand, steht dort `–`.
+Ein weiteres Dokument mit demselben Hash erhält keinen eigenen aktuellen
+Status und erscheint nicht als unabhängiger offener Nachbearbeitungsfall.
 
 Die frühere statische HTML/CSS/JavaScript-Seite auf dem internen API-Server
 unter `/` und `/dashboard` bleibt vorerst für bestehende interne Nutzer und

@@ -3,6 +3,7 @@ package de.frank.invoice.worker.application.watch;
 import de.frank.invoice.worker.application.InvoiceWorker;
 import de.frank.invoice.worker.application.configuration.WatchConfiguration;
 import de.frank.invoice.worker.application.workflow.DocumentProcessingResult;
+import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -193,6 +194,16 @@ public class WatchServiceRunner {
     }
 
     private void logFailedResult(final DocumentProcessingResult result, final Path sourceFile) {
+        if (result.status() == ProcessingStatus.MANUAL_REVIEW) {
+            LOG.warn("Processing requires manual review: {}", sourceFile.getFileName());
+            if (Files.exists(sourceFile)) {
+                LOG.warn("Source file remains in input because manual-review routing failed: {}",
+                        sourceFile.getFileName());
+            } else {
+                LOG.info("Source file routed to manual review: {}", sourceFile.getFileName());
+            }
+            return;
+        }
         if (result.archiveResult() == null || !result.archiveResult().archived()) {
             LOG.warn("Archiving failed or was not completed: {}", sourceFile.getFileName());
         }

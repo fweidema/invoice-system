@@ -228,7 +228,8 @@ public final class CockpitView extends VerticalLayout {
     private void configureGrids() {
         historyGrid.addColumn(item -> dateTime(item.startedAt())).setHeader("Gestartet");
         historyGrid.addColumn(item -> text(item.originalFilename())).setHeader("Datei");
-        historyGrid.addComponentColumn(item -> statusBadge(item.status())).setHeader("Status");
+        historyGrid.addComponentColumn(item -> statusBadge(item.status())).setHeader("Verarbeitungsergebnis");
+        historyGrid.addComponentColumn(item -> statusBadge(item.currentStatus())).setHeader("Aktueller Status");
         historyGrid.addColumn(item -> text(item.invoiceNumber())).setHeader("Rechnungsnummer");
         historyGrid.addColumn(item -> item.durationMillis() + " ms").setHeader("Dauer");
         historyGrid.addComponentColumn(item -> deleteButton(item.documentId())).setHeader("Aktion");
@@ -457,7 +458,8 @@ public final class CockpitView extends VerticalLayout {
             if (request == detailRequest) {
                 showDetail("Verarbeitung", List.of(
                         line("Datei", item.originalFilename()),
-                        line("Status", item.status()),
+                        line("Verarbeitungsergebnis", item.status()),
+                        line("Aktueller Status", item.currentStatus()),
                         line("Rechnungsnummer", item.invoiceNumber()),
                         line("Erfolgreich", yesNo(item.successful())),
                         line("Persistiert", yesNo(item.persisted())),

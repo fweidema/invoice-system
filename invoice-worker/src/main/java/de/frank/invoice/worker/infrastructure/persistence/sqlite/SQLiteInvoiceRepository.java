@@ -85,7 +85,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
             ALTER TABLE invoices ADD COLUMN file_hash TEXT
             """;
 
-    private static final String INSERT_INVOICE = """
+    static final String INSERT_INVOICE = """
             INSERT INTO invoices (
                 document_id,
                 original_path,
@@ -115,7 +115,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
                 created_at
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """;
-    private static final String UPDATE_REVIEW_FIELDS = """
+    static final String UPDATE_REVIEW_FIELDS = """
             UPDATE invoices SET
                 document_type=?, supplier_name=?, invoice_number=?, invoice_date=?,
                 gross_amount=?, currency=?
@@ -547,7 +547,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
         }
     }
 
-    private void bindInvoice(final PreparedStatement statement, final Invoice invoice) throws SQLException {
+    static void bindInvoice(final PreparedStatement statement, final Invoice invoice) throws SQLException {
         final Document document = invoice.document();
         final Supplier supplier = invoice.supplier();
         final Currency currency = resolveCurrency(invoice);
@@ -617,7 +617,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
                 resultSet.getString("payment_reference"));
     }
 
-    private Currency resolveCurrency(final Invoice invoice) {
+    private static Currency resolveCurrency(final Invoice invoice) {
         if (invoice.grossAmount() != null && invoice.grossAmount().currency() != null) {
             return invoice.grossAmount().currency();
         }
@@ -630,7 +630,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
         return null;
     }
 
-    private String formatDate(final LocalDate date) {
+    private static String formatDate(final LocalDate date) {
         return date == null ? null : date.toString();
     }
 
@@ -638,7 +638,7 @@ public class SQLiteInvoiceRepository implements InvoiceRepository {
         return date == null ? null : LocalDate.parse(date);
     }
 
-    private String formatAmount(final Money money) {
+    private static String formatAmount(final Money money) {
         return money == null ? null : money.amount().toPlainString();
     }
 

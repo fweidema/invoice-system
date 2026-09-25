@@ -35,6 +35,14 @@ public final class CockpitModels {
                              String status, boolean successful, boolean persisted,
                              boolean duplicateDetected, String invoiceNumber,
                              String startedAt, String finishedAt, long durationMillis,
-                             String errorMessage) {
+                             String errorMessage, String currentStatus) {
+        public Processing(final String documentId, final String originalFilename,
+                          final String status, final boolean successful, final boolean persisted,
+                          final boolean duplicateDetected, final String invoiceNumber,
+                          final String startedAt, final String finishedAt, final long durationMillis,
+                          final String errorMessage) {
+            this(documentId, originalFilename, status, successful, persisted, duplicateDetected,
+                    invoiceNumber, startedAt, finishedAt, durationMillis, errorMessage, null);
+        }
     }
 }

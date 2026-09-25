@@ -54,6 +54,7 @@ public class ManualReviewService {
     private final ManualReviewConfiguration configuration;
     private final Set<Path> trustedRoots;
     private final Clock clock;
+    private final ReviewInvoiceWriter invoiceWriter;
 
     public ManualReviewService(
             final ProcessingStateRepository stateRepository,
@@ -66,6 +67,35 @@ public class ManualReviewService {
             final ManualReviewConfiguration configuration,
             final Set<Path> trustedRoots,
             final Clock clock) {
+        this(stateRepository, invoiceRepository, historyRepository, eventRepository, archiveService,
+                ocrTextProvider, processingConfiguration, configuration, trustedRoots, clock,
+                (expected, updated, invoice, event, create) -> {
+                    if (!stateRepository.compareAndSet(expected.processingId(), expected.updatedAt(), updated)) {
+                        return false;
+                    }
+                    if (create) {
+                        invoiceRepository.save(invoice);
+                    } else if (!invoiceRepository.update(invoice)) {
+                        return false;
+                    }
+                    eventRepository.save(expected.processingId(), event);
+                    return true;
+                });
+    }
+
+    /** Creates the service with an atomic writer for invoice corrections. */
+    public ManualReviewService(
+            final ProcessingStateRepository stateRepository,
+            final InvoiceRepository invoiceRepository,
+            final ProcessingHistoryRepository historyRepository,
+            final ProcessingEventRepository eventRepository,
+            final ArchiveService archiveService,
+            final OcrTextProvider ocrTextProvider,
+            final ProcessingConfiguration processingConfiguration,
+            final ManualReviewConfiguration configuration,
+            final Set<Path> trustedRoots,
+            final Clock clock,
+            final ReviewInvoiceWriter invoiceWriter) {
         this.stateRepository = Objects.requireNonNull(stateRepository);
         this.invoiceRepository = Objects.requireNonNull(invoiceRepository);
         this.historyRepository = Objects.requireNonNull(historyRepository);
@@ -76,6 +106,7 @@ public class ManualReviewService {
         this.configuration = Objects.requireNonNull(configuration);
         this.trustedRoots = trustedRoots.stream().map(this::normalized).collect(java.util.stream.Collectors.toUnmodifiableSet());
         this.clock = Objects.requireNonNull(clock);
+        this.invoiceWriter = Objects.requireNonNull(invoiceWriter);
     }
 
     public PageResult<ManualReviewCase> search(final ManualReviewSearchCriteria criteria) {
@@ -109,28 +140,30 @@ public class ManualReviewService {
         return aggregate(state(processingId));
     }
 
+    /** Returns the current state only for the document that owns the processing case. */
+    public java.util.Optional<ProcessingStatus> currentStatusForDocument(final String documentId) {
+        return stateRepository.findByDocumentId(documentId).map(ProcessingState::status);
+    }
+
     public ManualReviewCase correctInvoice(final String processingId, final InvoiceCorrection correction) {
         final ProcessingState state = state(processingId);
         requireReviewStatus(state);
         if (!state.updatedAt().equals(correction.expectedUpdatedAt())) {
             throw conflict();
         }
-        final Invoice current = invoiceRepository.findByFileHash(state.fileHash())
-                .orElseThrow(() -> new ManualReviewException(
-                        ManualReviewErrorCode.VALIDATION_FAILED, "No invoice is available for correction."));
+        final Invoice current = invoiceRepository.findByFileHash(state.fileHash()).orElse(null);
         final List<String> changed = new ArrayList<>();
-        final Invoice corrected = correctedInvoice(current, correction, changed);
+        final Invoice corrected = current == null ? newInvoice(state, correction, changed)
+                : correctedInvoice(current, correction, changed);
         validate(corrected);
-        final ProcessingState touched = copyState(state, state.status(), Instant.now(clock), null, null);
-        if (!stateRepository.compareAndSet(processingId, state.updatedAt(), touched)) {
+        final ProcessingState touched = copyState(state, state.status(), nextVersion(state), null, null);
+        final boolean create = current == null;
+        final ProcessingEvent event = event(create ? ProcessingEventType.INVOICE_CREATED
+                        : ProcessingEventType.INVOICE_CORRECTED, state.status(), state.status(),
+                create ? "Invoice created after manual review." : "Invoice fields corrected.", changed);
+        if (!invoiceWriter.write(state, touched, corrected, event, create)) {
             throw conflict();
         }
-        if (!invoiceRepository.update(corrected)) {
-            throw new ManualReviewException(ManualReviewErrorCode.MANUAL_REVIEW_NOT_FOUND, "Invoice not found.");
-        }
-        eventRepository.save(processingId, event(
-                ProcessingEventType.INVOICE_CORRECTED, state.status(), state.status(),
-                "Invoice fields corrected.", changed));
         return aggregate(touched);
     }
 
@@ -144,7 +177,7 @@ public class ManualReviewService {
             throw new ManualReviewException(ManualReviewErrorCode.RETRY_LIMIT_REACHED, "Retry limit reached.");
         }
         ProcessingStatusTransitions.requireValid(state.status(), ProcessingStatus.RETRY_PENDING);
-        final Instant now = Instant.now(clock);
+        final Instant now = nextVersion(state);
         final ProcessingState retry = copyState(state, ProcessingStatus.RETRY_PENDING, now, now, null);
         compareAndSet(state, expectedUpdatedAt, retry);
         eventRepository.save(processingId, event(
@@ -159,7 +192,7 @@ public class ManualReviewService {
         final Invoice invoice = invoiceRepository.findByFileHash(state.fileHash())
                 .orElseThrow(() -> new ManualReviewException(
                         ManualReviewErrorCode.ARCHIVE_NOT_ALLOWED, "A persisted invoice is required."));
-        final Instant lockTime = Instant.now(clock);
+        final Instant lockTime = nextVersion(state);
         final ProcessingState locked = copyState(state, state.status(), lockTime, state.nextRetryAt(), null);
         compareAndSet(state, expectedUpdatedAt, locked);
         eventRepository.save(processingId, event(
@@ -173,7 +206,7 @@ public class ManualReviewService {
                     state.processingId(), state.documentId(), state.fileHash(), state.sourceFilename(),
                     state.sourcePath(), ProcessingStatus.ARCHIVED, state.processingAttempts(), null, null, null, null,
                     state.processingStartedAt(), Instant.now(clock), state.ocrOutputPath(),
-                    result.archivedFile().toString(), Instant.now(clock));
+                    result.archivedFile().toString(), nextVersion(locked));
             if (!stateRepository.compareAndSet(processingId, locked.updatedAt(), archived)) {
                 throw conflict();
             }
@@ -192,7 +225,7 @@ public class ManualReviewService {
         final ProcessingState state = state(processingId);
         requireReviewStatus(state);
         ProcessingStatusTransitions.requireValid(state.status(), ProcessingStatus.MANUALLY_COMPLETED);
-        final Instant now = Instant.now(clock);
+        final Instant now = nextVersion(state);
         final ProcessingState completed = copyState(state, ProcessingStatus.MANUALLY_COMPLETED, now, null, now);
         compareAndSet(state, expectedUpdatedAt, completed);
         eventRepository.save(processingId, event(
@@ -260,6 +293,11 @@ public class ManualReviewService {
                 ManualReviewErrorCode.CONCURRENT_MODIFICATION, "The review case was changed concurrently.");
     }
 
+    private Instant nextVersion(final ProcessingState state) {
+        final Instant now = Instant.now(clock);
+        return now.isAfter(state.updatedAt()) ? now : state.updatedAt().plusNanos(1);
+    }
+
     private Invoice correctedInvoice(
             final Invoice invoice,
             final InvoiceCorrection correction,
@@ -293,6 +331,41 @@ public class ManualReviewService {
                 invoice.orderNumber(), invoice.paymentReference());
     }
 
+    private Invoice newInvoice(final ProcessingState state, final InvoiceCorrection correction,
+                               final List<String> changed) {
+        final Map<String, String> errors = new java.util.LinkedHashMap<>();
+        if (correction.vendor() == null || correction.vendor().isBlank()) {
+            errors.put("vendor", "Vendor is required.");
+        }
+        if (correction.invoiceNumber() == null || correction.invoiceNumber().isBlank()) {
+            errors.put("invoiceNumber", "Invoice number is required.");
+        }
+        if (correction.invoiceDate() == null) {
+            errors.put("invoiceDate", "Invoice date is required.");
+        }
+        if (correction.amount() == null || correction.amount().signum() < 0) {
+            errors.put("amount", "Nonnegative amount is required.");
+        }
+        if (correction.currency() == null || correction.currency().isBlank()) {
+            errors.put("currency", "Currency is required.");
+        }
+        if (correction.category() == null || correction.category().isBlank()) {
+            errors.put("category", "Category is required.");
+        }
+        if (!errors.isEmpty()) {
+            throw new ManualReviewException(ManualReviewErrorCode.VALIDATION_FAILED,
+                    "Invoice validation failed.", errors);
+        }
+        changed.addAll(List.of("vendor", "invoiceNumber", "invoiceDate", "amount", "currency", "category"));
+        final Document document = new Document(state.documentId(), state.sourcePath(), state.ocrOutputPath(),
+                category(correction.category()), state.sourceFilename(), state.fileHash(),
+                state.processingStartedAt());
+        return new Invoice(document, supplier(null, correction.vendor()), correction.invoiceNumber(),
+                correction.invoiceDate(), null, null, null,
+                new Money(correction.amount(), currency(correction.currency())),
+                List.of(), List.of(), null, null, null);
+    }
+
     private void validate(final Invoice invoice) {
         final Map<String, String> errors = new java.util.LinkedHashMap<>();
         if (invoice.supplier() == null || invoice.supplier().name() == null || invoice.supplier().name().isBlank()) {
@@ -300,6 +373,12 @@ public class ManualReviewService {
         }
         if (invoice.invoiceNumber() == null || invoice.invoiceNumber().isBlank()) {
             errors.put("invoiceNumber", "Invoice number must not be blank.");
+        }
+        if (invoice.invoiceDate() == null) {
+            errors.put("invoiceDate", "Invoice date is required.");
+        }
+        if (invoice.document().documentType() == null) {
+            errors.put("category", "Category is required.");
         }
         if (invoice.grossAmount() == null || invoice.grossAmount().amount().signum() < 0) {
             errors.put("amount", "Amount must not be negative.");

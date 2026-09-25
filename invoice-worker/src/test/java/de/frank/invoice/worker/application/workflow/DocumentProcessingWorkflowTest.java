@@ -25,6 +25,7 @@ import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.DocumentType;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
 import de.frank.invoice.worker.domain.invoice.Invoice;
+import de.frank.invoice.worker.domain.processing.ProcessingErrorCode;
 import de.frank.invoice.worker.domain.processing.ProcessingState;
 import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import de.frank.invoice.worker.infrastructure.pdf.PdfTextExtractor;
@@ -191,6 +192,24 @@ class DocumentProcessingWorkflowTest {
     }
 
     @Test
+    void sameHashAliasDoesNotGetIndependentManualReviewStatus() {
+        final RecordingProcessingStateRepository states = new RecordingProcessingStateRepository();
+        states.save(processingState(ProcessingStatus.MANUAL_REVIEW));
+        final CountingInvoiceRepository invoices = new CountingInvoiceRepository();
+        final DocumentProcessingWorkflow workflow = workflow(invoices, new DuplicateDetector(invoices),
+                new CountingArchiveService(), new InvoiceValidator(), stateTracker(states));
+        final Document original = document();
+        final Document alias = new Document("alias-document", "alias.pdf", null,
+                DocumentType.INVOICE, "alias.pdf", original.fileHash(), original.importedAt());
+
+        final DocumentProcessingResult result = workflow.process(alias);
+
+        assertThat(result.status()).isEqualTo(ProcessingStatus.DUPLICATE);
+        assertThat(states.statuses()).containsExactly(ProcessingStatus.MANUAL_REVIEW);
+        assertThat(invoices.saveCount()).isZero();
+    }
+
+    @Test
     void processDoesNotArchiveInvoiceWhenValidationFails() {
         // Arrange
         final CountingInvoiceRepository repository = new CountingInvoiceRepository();
@@ -219,6 +238,44 @@ class DocumentProcessingWorkflowTest {
         assertThat(result.successful()).isFalse();
         assertThat(result.persisted()).isFalse();
         assertThat(result.archiveResult()).isNull();
+    }
+
+    @Test
+    void processRoutesValidationFailureToManualReview() {
+        // Arrange
+        final CountingInvoiceRepository repository = new CountingInvoiceRepository();
+        final RecordingProcessingStateRepository stateRepository = new RecordingProcessingStateRepository();
+        final InvoiceValidator invoiceValidator = new InvoiceValidator() {
+            @Override
+            public ValidationResult validate(final Invoice invoice) {
+                return new ValidationResult(List.of(new ValidationMessage(
+                        ValidationSeverity.ERROR,
+                        "invoiceNumber",
+                        "Invoice number is required.")));
+            }
+        };
+        final DocumentProcessingWorkflow workflow = workflow(
+                repository,
+                new DuplicateDetector(repository),
+                new CountingArchiveService(),
+                invoiceValidator,
+                stateTracker(stateRepository));
+
+        // Act
+        final DocumentProcessingResult result = workflow.process(document());
+
+        // Assert
+        assertThat(result.status()).isEqualTo(ProcessingStatus.MANUAL_REVIEW);
+        assertThat(stateRepository.statuses()).containsExactly(
+                ProcessingStatus.RECEIVED,
+                ProcessingStatus.OCR_RUNNING,
+                ProcessingStatus.OCR_COMPLETED,
+                ProcessingStatus.EXTRACTION_RUNNING,
+                ProcessingStatus.MANUAL_REVIEW);
+        assertThat(stateRepository.states())
+                .last()
+                .extracting(ProcessingState::lastErrorCode)
+                .isEqualTo(ProcessingErrorCode.VALIDATION_FAILED);
     }
 
     @Test

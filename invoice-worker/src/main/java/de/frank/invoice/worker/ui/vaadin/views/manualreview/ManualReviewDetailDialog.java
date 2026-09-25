@@ -52,7 +52,7 @@ public final class ManualReviewDetailDialog extends Dialog {
     private final Button save = new Button("Speichern");
     private final Button retry = new Button("Retry");
     private final Button archive = new Button("Archivieren");
-    private final Button complete = new Button("Manuell abschließen");
+    private final Button complete = new Button("Ohne Rechnung abschließen");
     private final Button ocr = new Button("OCR-Text anzeigen");
     private final Anchor original = new Anchor();
 
@@ -88,10 +88,8 @@ public final class ManualReviewDetailDialog extends Dialog {
                 "Rechnung archivieren?", "Die vorhandenen Rechnungsdaten werden ohne erneute Analyse archiviert.",
                 () -> api.archive(item.processingId(), item.updatedAt())));
         complete.addClickListener(event -> confirm(
-                retryPending() ? "Retry abbrechen?" : "Manuell abschließen?",
-                retryPending()
-                        ? "Der geplante Retry wird abgebrochen. Anschließend kann das Dokument gelöscht werden."
-                        : "Der Fall wird ohne Archivierung terminal abgeschlossen.",
+                retryPending() ? "Retry abbrechen?" : "Ohne Rechnung abschließen?",
+                completionConfirmationText(),
                 () -> api.complete(item.processingId(), item.updatedAt())));
         ocr.addClickListener(event -> showOcr());
         original.setText("Original-PDF herunterladen");
@@ -130,7 +128,7 @@ public final class ManualReviewDetailDialog extends Dialog {
         archive.setVisible(value.allows("archive"));
         save.setVisible(value.allows("correctInvoice"));
         complete.setText("RETRY_PENDING".equals(value.processingStatus())
-                ? "Retry abbrechen" : "Manuell abschließen");
+                ? "Retry abbrechen" : "Ohne Rechnung abschließen");
         complete.setVisible(value.allows("complete"));
         ocr.setVisible(value.ocrAvailable() && value.allows("ocrText"));
         original.setVisible(value.originalAvailable() && value.allows("original"));
@@ -300,6 +298,12 @@ public final class ManualReviewDetailDialog extends Dialog {
 
     private boolean retryPending() {
         return "RETRY_PENDING".equals(item.processingStatus());
+    }
+
+    String completionConfirmationText() {
+        return retryPending()
+                ? "Der geplante Retry wird abgebrochen. Es wird keine Rechnung erzeugt und das Dokument nicht archiviert."
+                : "Es wird keine Rechnung erzeugt und das Dokument nicht archiviert. Der Fall wird abgeschlossen.";
     }
 
     private void invalid(final com.vaadin.flow.component.HasValidation field, final String message) {

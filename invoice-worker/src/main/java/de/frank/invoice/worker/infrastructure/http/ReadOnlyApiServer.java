@@ -322,7 +322,7 @@ public class ReadOnlyApiServer implements AutoCloseable {
             try {
                 writeJson(exchange, HTTP_OK, PageResponse.from(
                         processingHistoryRepository.search(historyCriteria(exchange)),
-                        ProcessingHistoryResponse::from));
+                        this::processingHistoryResponse));
             } catch (IllegalArgumentException exception) {
                 writeError(exchange, HTTP_BAD_REQUEST, "INVALID_QUERY_PARAMETER", exception.getMessage());
             }
@@ -339,10 +339,17 @@ public class ReadOnlyApiServer implements AutoCloseable {
                 writeError(exchange, HTTP_NOT_FOUND, "PROCESSING_HISTORY_NOT_FOUND", "Processing history entry not found.");
                 return;
             }
-            writeJson(exchange, HTTP_OK, ProcessingHistoryResponse.from(entry));
+            writeJson(exchange, HTTP_OK, processingHistoryResponse(entry));
             return;
         }
         writeError(exchange, HTTP_NOT_FOUND, "NOT_FOUND", "Endpoint not found.");
+    }
+
+    private ProcessingHistoryResponse processingHistoryResponse(final ProcessingHistoryEntry entry) {
+        final String currentStatus = manualReviewService == null ? null
+                : manualReviewService.currentStatusForDocument(entry.documentId())
+                        .map(Enum::name).orElse(null);
+        return ProcessingHistoryResponse.from(entry, currentStatus);
     }
 
     private void handleDocumentDeletion(final HttpExchange exchange) throws IOException {

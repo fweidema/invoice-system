@@ -66,8 +66,9 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
             """;
     private static final String SELECT_BY_HASH = "SELECT * FROM processing_state WHERE file_hash = ?";
     private static final String SELECT_BY_ID = "SELECT * FROM processing_state WHERE processing_id = ?";
+    private static final String SELECT_BY_DOCUMENT_ID = "SELECT * FROM processing_state WHERE document_id = ?";
     private static final String SELECT_ALL = "SELECT * FROM processing_state ORDER BY updated_at DESC, processing_id";
-    private static final String CAS_UPDATE = """
+    static final String CAS_UPDATE = """
             UPDATE processing_state SET
                 document_id=?, file_hash=?, source_filename=?, source_path=?, status=?,
                 processing_attempts=?, last_error_code=?, last_error_message=?, last_error_at=?,
@@ -122,6 +123,11 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
     }
 
     @Override
+    public Optional<ProcessingState> findByDocumentId(final String documentId) {
+        return findOne(SELECT_BY_DOCUMENT_ID, documentId, "Could not load processing state by document id");
+    }
+
+    @Override
     public List<ProcessingState> findAll() {
         try (Connection connection = connectionFactory.openConnection();
              PreparedStatement statement = connection.prepareStatement(SELECT_ALL);
@@ -143,28 +149,33 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
             final ProcessingState state) {
         try (Connection connection = connectionFactory.openConnection();
              PreparedStatement statement = connection.prepareStatement(CAS_UPDATE)) {
-            int index = 1;
-            statement.setString(index++, state.documentId());
-            statement.setString(index++, state.fileHash());
-            statement.setString(index++, state.sourceFilename());
-            statement.setString(index++, state.sourcePath());
-            statement.setString(index++, state.status().name());
-            statement.setInt(index++, state.processingAttempts());
-            statement.setString(index++, enumName(state.lastErrorCode()));
-            statement.setString(index++, state.lastErrorMessage());
-            statement.setString(index++, instant(state.lastErrorAt()));
-            statement.setString(index++, instant(state.nextRetryAt()));
-            statement.setString(index++, state.processingStartedAt().toString());
-            statement.setString(index++, instant(state.processingFinishedAt()));
-            statement.setString(index++, state.ocrOutputPath());
-            statement.setString(index++, state.archivePath());
-            statement.setString(index++, state.updatedAt().toString());
-            statement.setString(index++, processingId);
-            statement.setString(index, expectedUpdatedAt.toString());
+            bindCompareAndSet(statement, processingId, expectedUpdatedAt, state);
             return statement.executeUpdate() == 1;
         } catch (SQLException exception) {
             throw new PersistenceException("Could not conditionally update processing state", exception);
         }
+    }
+
+    static void bindCompareAndSet(final PreparedStatement statement, final String processingId,
+                                  final Instant expectedUpdatedAt, final ProcessingState state) throws SQLException {
+        int index = 1;
+        statement.setString(index++, state.documentId());
+        statement.setString(index++, state.fileHash());
+        statement.setString(index++, state.sourceFilename());
+        statement.setString(index++, state.sourcePath());
+        statement.setString(index++, state.status().name());
+        statement.setInt(index++, state.processingAttempts());
+        statement.setString(index++, enumName(state.lastErrorCode()));
+        statement.setString(index++, state.lastErrorMessage());
+        statement.setString(index++, instant(state.lastErrorAt()));
+        statement.setString(index++, instant(state.nextRetryAt()));
+        statement.setString(index++, state.processingStartedAt().toString());
+        statement.setString(index++, instant(state.processingFinishedAt()));
+        statement.setString(index++, state.ocrOutputPath());
+        statement.setString(index++, state.archivePath());
+        statement.setString(index++, state.updatedAt().toString());
+        statement.setString(index++, processingId);
+        statement.setString(index, expectedUpdatedAt.toString());
     }
 
     @Override
@@ -241,11 +252,11 @@ public class SQLiteProcessingStateRepository implements ProcessingStateRepositor
                 Instant.parse(resultSet.getString("updated_at")));
     }
 
-    private String enumName(final Enum<?> value) {
+    private static String enumName(final Enum<?> value) {
         return value == null ? null : value.name();
     }
 
-    private String instant(final Instant value) {
+    private static String instant(final Instant value) {
         return value == null ? null : value.toString();
     }
 

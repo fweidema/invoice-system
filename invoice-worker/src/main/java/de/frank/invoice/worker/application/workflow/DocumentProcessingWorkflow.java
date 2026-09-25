@@ -22,6 +22,7 @@ import de.frank.invoice.worker.application.validation.ValidationResult;
 import de.frank.invoice.worker.domain.document.Document;
 import de.frank.invoice.worker.domain.document.ExtractedDocument;
 import de.frank.invoice.worker.domain.invoice.Invoice;
+import de.frank.invoice.worker.domain.processing.ProcessingErrorCode;
 import de.frank.invoice.worker.domain.processing.ProcessingHistoryEntry;
 import de.frank.invoice.worker.domain.processing.ProcessingStatus;
 import de.frank.invoice.worker.domain.processing.ProcessingStage;
@@ -186,13 +187,16 @@ public class DocumentProcessingWorkflow {
                 final ProcessingStateTracker.ProcessingAdmission admission = stateTracker.admit(document);
                 state = admission.state();
                 if (!admission.process()) {
-                    messages.add(admission.duplicate()
+                    final boolean alias = !state.documentId().equals(document.id());
+                    messages.add(alias
+                            ? "Content belongs to an existing processing case."
+                            : admission.duplicate()
                             ? "Content duplicate already archived."
                             : state.status() == ProcessingStatus.MANUAL_REVIEW
                                     ? "Document is awaiting manual review."
                                     : "Retry is not due yet.");
                     return complete(document, failedResult(messages,
-                            admission.duplicate() ? ProcessingStatus.DUPLICATE : state.status()), startedAt);
+                            admission.duplicate() || alias ? ProcessingStatus.DUPLICATE : state.status()), startedAt);
                 }
                 if (state.lastErrorCode() == de.frank.invoice.worker.domain.processing.ProcessingErrorCode.ARCHIVE_MOVE_FAILED) {
                     final java.util.Optional<Invoice> persistedInvoice = invoiceRepository.findByFileHash(document.fileHash());
@@ -281,14 +285,17 @@ public class DocumentProcessingWorkflow {
             addValidationMessages(messages, validationResult);
             if (!validationResult.valid()) {
                 if (stateTracker != null) {
-                    stateTracker.transition(state, ProcessingStatus.EXTRACTION_COMPLETED, null, null);
+                    state = stateTracker.fail(
+                            state,
+                            ProcessingErrorCode.VALIDATION_FAILED,
+                            "Invoice validation failed.");
                 }
                 LOG.warn("Invoice validation failed for document {}", document.originalFilename());
                 messages.add("Invoice validation failed. Persistence skipped.");
                 return complete(
                         ocrDocument,
                         result(false, false, PERSISTENCE_SKIPPED_MESSAGE, null, null, messages, invoice,
-                                ProcessingStatus.VALIDATION_FAILED),
+                                state == null ? ProcessingStatus.VALIDATION_FAILED : state.status()),
                         startedAt);
             }
 
